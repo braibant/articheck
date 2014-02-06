@@ -5,6 +5,7 @@ module Ty = struct
       eq: 'a -> 'a -> bool;
       mutable enum : 'a list;
       fresh : ('a list -> 'a) option; 
+      invar : ('a -> bool) option;
       uid : int;
     }
       
@@ -16,6 +17,36 @@ module Ty = struct
 
   let elements s = s.enum
 
+  let gensym = let r = ref (-1) in fun () -> incr r; !r
+    
+  let declare eq = {eq; enum = []; fresh = None; invar = None; uid = gensym ()}
+
+  (* generate a fresh type descriptor *)
+  (* maybe we could remember what is the base type, so that if we run
+     out of elements for the new type, we could generate new instances of
+     the old one, and select the one that fulfill the invariant. *)
+  let (/) ty invar =     
+    match ty.invar with 
+      | None -> 
+	let invar = Some invar in 
+	{ty with uid = gensym (); invar}
+      | Some old -> 
+	let invar = Some (fun x -> invar x && old x) in 
+	{ty with uid = gensym (); invar}
+	  
+  (* tag a type with a generator, without generating a fresh type descriptor *)
+  let (&) ty fresh = 
+    match ty.fresh with
+      | None -> 
+	{ty with fresh = Some fresh}
+      | Some _ -> 
+	invalid_arg "fresh"
+
+  (** Check a property overall the elements of ['a ty] that were
+      generated up to this point *)
+  let for_all ty f =
+    List.for_all f ty.enum
+      
 end
 
 type 'a ty = 'a Ty.t    
@@ -24,14 +55,17 @@ type (_,_) fn =
 | Constant : 'a ty -> ('a,'a) fn
 | Fun    : 'a ty * ('b, 'c) fn -> ('a -> 'b, 'c) fn;;
 
+let (@->) ty fd = Fun (ty,fd)
+let returning ty = Constant ty
+
 let rec eval : type a b. (a,b) fn -> a -> b list = 
-		 let open Ty in 
-  fun fd f ->
-    match fd with
-    | Constant ty -> [f]
-    | Fun (ty,fd) -> 
-      List.flatten (List.map (fun e -> eval fd (f e)) (ty.enum))
-;;  
+		     let open Ty in 
+		     fun fd f ->
+		       match fd with
+			 | Constant ty -> [f]
+			 | Fun (ty,fd) -> 
+			   List.flatten (List.map (fun e -> eval fd (f e)) (ty.enum))
+;;
 
 let rec codom : type a b. (a,b) fn -> b ty = 
 		  function Fun (_,fd) -> codom fd
@@ -43,59 +77,44 @@ let use fd f =
   List.iter (fun x -> Ty.add x ty) prod;
   ()
 
-let declare_type () =
-  let id = ref 0 in 
-  fun ?fresh eq -> 
-    incr id; Ty.({ eq ; fresh; enum = []; uid = !id})
 
 let populate n ty = 
   let open Ty in 
   match ty.fresh with
-  | None -> invalid_arg "populate"
-  | Some fresh -> 
-  for i = 0 to n - 1 do
-    ty.enum <- fresh (ty.enum) :: ty.enum
-  done
+    | None -> invalid_arg "populate"
+    | Some fresh -> 
+      for i = 0 to n - 1 do
+	ty.enum <- fresh (ty.enum) :: ty.enum
+      done
 ;;
-
-let (@->) ty fd = Fun (ty,fd)
-let returning ty = Constant ty
 
 module Sig = struct
   type elem = Elem : ('a,'b) fn * 'a -> elem
-    
-  type t = (string * elem) list 
+
+  type ident = string
+  type t = (ident * elem) list 
 
   let empty = []
 
-  let add s id fd f =
+  let add s (id: ident) fd f =
     (id, Elem (fd,f))::s
-
-  type iteratee = {inhab : 'a 'b. string -> ('a,'b) fn -> 'a -> unit } 
-
-  let iter (g:iteratee ) s =
-    List.iter (fun (id,d) ->
-      match d with
-	Elem (fd,f) -> g.inhab id fd f
-      
-    ) s
-
-  let for_all ty f =
-    List.for_all f ty.Ty.enum
 end
+
 
 let rec ncheck n (s: Sig.t) = 
   if n = 0 
   then ()
   else 
-    begin 
-      Sig.iter {Sig.inhab = fun id fd f -> use fd f} s;
-      ncheck (pred n) s
-    end
+    (    
+      List.iter (fun (id,d) ->
+	match d with Sig.Elem (fd,f) -> use fd f	  
+      ) s; 
+      ncheck (n-1) s
+    )
+      
 
-
-(* Example *)
-module SIList = struct
+(* Example: sorted lists *)
+module IList = struct
 
   type t = int list
 
@@ -108,18 +127,18 @@ module SIList = struct
 end
  
 
-let si_t : SIList.t ty = declare_type () (=)  
-let int_t : int ty = declare_type () ~fresh:(fun _ -> Random.int 1000)(=)
+let si_t : IList.t ty = Ty.(declare (=))
+let int_t : int ty = Ty.(declare (=) & (fun _ -> Random.int 1000))
 let _ = populate 10 int_t
 
 
 let s = Sig.empty 
-let s = Sig.add s "empty" (returning si_t) SIList.empty
-let s = Sig.add s "add" (int_t @-> si_t @-> returning si_t) SIList.add
+let s = Sig.add s "empty" (returning si_t) IList.empty
+let s = Sig.add s "add" (int_t @-> si_t @-> returning si_t) IList.add
 
 let _ =  ncheck  5 s;;
 
-let _ = Sig.prop si_t (fun s -> List.sort Pervasives.compare s = s);;  
+let _ = Ty.for_all si_t (fun s -> List.sort Pervasives.compare s = s);;  
 
 
 
