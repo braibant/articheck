@@ -63,7 +63,8 @@ module Sig = struct
 end
 
 let rec ncheck n (s: Sig.t) = 
-  if n = 0 then ()
+  if n = 0 
+  then ()
   else 
     begin 
       Sig.iter {Sig.inhab = fun id fd f -> use fd f} s;
