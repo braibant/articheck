@@ -167,12 +167,12 @@ module RBT = struct
     | Empty -> Red (Empty, x, Empty)
     | Red (l,v,r) -> 
       if x <= v 
-      then balance (Red (insert x l, v, r))
-      else balance (Red (l, v, insert x r))
+      then (Red (insert x l, v, r))
+      else (Red (l, v, insert x r))
     | Black (l,v,r) -> 
       if x <= v 
-      then (Black (insert x l, v, r))
-      else (Black (l, v, insert x r))
+      then balance (Black (insert x l, v, r))
+      else balance (Black (l, v, insert x r))
     
   let insert x n = black (insert x n) 
   
