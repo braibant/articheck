@@ -123,7 +123,7 @@ let () = populate 10 int_t
 
 let silist_sig = Sig.([
   val_ "empty" (returning si_t) SIList.empty;
-  va_ "add" (int_t @-> si_t @-> returning si_t) SIList.add;
+  val_ "add" (int_t @-> si_t @-> returning si_t) SIList.add;
 ])
 
 let () =  ncheck 5 silist_sig
