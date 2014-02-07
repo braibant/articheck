@@ -98,10 +98,7 @@ module Sig = struct
   type ident = string
   type t = (ident * elem) list 
 
-  let empty = []
-
-  let add s (id: ident) fd f =
-    (id, Elem (fd,f))::s
+  let val_ id fd f = (id, Elem (fd, f))
 end
 
 let ncheck n (s: Sig.t) = 
@@ -124,11 +121,12 @@ let si_t : SIList.t ty = Ty.(declare (=))
 let int_t : int ty = Ty.(declare (=) & (fun _ -> Random.int 1000))
 let () = populate 10 int_t
 
-let s = Sig.empty 
-let s = Sig.add s "empty" (returning si_t) SIList.empty
-let s = Sig.add s "add" (int_t @-> si_t @-> returning si_t) SIList.add
+let silist_sig = Sig.([
+  val_ "empty" (returning si_t) SIList.empty;
+  va_ "add" (int_t @-> si_t @-> returning si_t) SIList.add;
+])
 
-let () =  ncheck  5 s
+let () =  ncheck 5 silist_sig
 
 let () =
   let prop s = List.sort Pervasives.compare s = s in
