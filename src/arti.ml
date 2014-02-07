@@ -3,7 +3,7 @@ module Ty = struct
     eq: 'a -> 'a -> bool;
     mutable enum : 'a list;
     fresh : ('a list -> 'a) option;
-    invar : ('a -> bool) option;
+    invar : 'a -> bool;
     uid : int;
   }
 
@@ -23,7 +23,7 @@ module Ty = struct
     eq;
     enum = [];
     fresh = None;
-    invar = None;
+    invar = (fun _ -> true);
     uid = gensym ()
   }
 
@@ -31,15 +31,10 @@ module Ty = struct
   (* maybe we could remember what is the base type, so that if we run
      out of elements for the new type, we could generate new instances of
      the old one, and select the one that fulfill the invariant. *)
-  let (/) ty invar =     
-    match ty.invar with 
-      | None -> 
-	let invar = Some invar in 
-	{ty with uid = gensym (); invar}
-      | Some old -> 
-	let invar = Some (fun x -> invar x && old x) in 
-	{ty with uid = gensym (); invar}
-	  
+  let (/) ty invar =
+    let invar x = invar x && ty.invar x in
+    {ty with uid = gensym (); invar}
+
   (* tag a type with a generator, without generating a fresh type descriptor *)
   let (&) ty fresh = 
     match ty.fresh with
@@ -89,7 +84,7 @@ let populate n ty =
     | None -> invalid_arg "populate"
     | Some fresh ->
       for i = 0 to n - 1 do
-        ty.enum <- fresh ty.enum :: ty.enum
+        Ty.add (fresh ty.enum) ty
       done
 
 module Sig = struct
