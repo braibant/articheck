@@ -125,4 +125,79 @@ let () =  ncheck 5 silist_sig
 
 let () =
   let prop s = List.sort Pervasives.compare s = s in
-  assert (Ty.for_all si_t prop)
+  assert (Ty.for_all si_t prop);
+  ()
+
+
+module RBT = struct
+
+  type key = int 
+  type t = | Red of t * key * t 
+	   | Black of t * key  * t
+	   | Empty
+
+	       
+  let empty = Empty
+  let rec mem x = function
+    | Empty -> false
+    | Black (l,v,r) | Red (l,v,r) -> 
+      begin
+	match compare x v with
+	| -1 -> mem x l 
+	| 0 -> true
+	| _ -> mem x r
+      end
+
+  let black = function 
+    | Red (l,v,r) -> Black (l,v,r) 
+    | n -> n
+
+  let balance = function
+    | Black (Red (Red (t1,x1,t2), x2, t3), x3, t4) ->
+      Red (Black (t1, x1, t2) , x2, Black (t3, x3, t4))
+    | Black (Red (t1,x1, Red (t2,x2,t3)), x3, t4) ->
+      Red( Black (t1, x1, t2), x2, Black(t3, x3, t4))
+    | Black (t1, x1, Red (t2, x2, Red (t3, x3, t4))) ->
+      Red (Black (t1,x1,t2),x2, Black (t3,x3,t4))
+    | Black (t1, x1, Red (Red (t2,x2,t3), x3, t4)) ->
+      Red (Black (t1,x1, t2), x2, Black (t3,x3,t4)) 
+    | n -> n
+
+  let rec insert x = function 
+    | Empty -> Red (Empty, x, Empty)
+    | Red (l,v,r) -> 
+      if x <= v 
+      then balance (Red (insert x l, v, r))
+      else balance (Red (l, v, insert x r))
+    | Black (l,v,r) -> 
+      if x <= v 
+      then (Black (insert x l, v, r))
+      else (Black (l, v, insert x r))
+    
+  let insert x n = black (insert x n) 
+  
+  let rec elements = function 
+    | Empty -> []
+    | Black (l,v,r) -> elements l @ (v::elements r)
+    | Red (l,v,r) -> elements l @ (v::elements r)      
+
+
+end
+
+
+
+let rbt_t : RBT.t ty = Ty.(declare (=))
+let int_t : int ty = Ty.(declare (=) & (fun _ -> Random.int 1000))
+let () = populate 10 int_t
+
+let rbt_sig = Sig.([
+  val_ "empty" (returning rbt_t) RBT.empty;
+  val_ "insert" (int_t @-> rbt_t @-> returning rbt_t) RBT.insert;
+])
+
+let () =  ncheck 5 rbt_sig
+
+let () =
+  let prop s = let s = RBT.elements s in List.sort Pervasives.compare s = s in
+  assert (Ty.for_all rbt_t prop);
+  ()
