@@ -1,25 +1,31 @@
 module Ty = struct
-    
-  type 'a t =
-    {
-      eq: 'a -> 'a -> bool;
-      mutable enum : 'a list;
-      fresh : ('a list -> 'a) option; 
-      invar : ('a -> bool) option;
-      uid : int;
-    }
-      
+  type 'a t = {
+    eq: 'a -> 'a -> bool;
+    mutable enum : 'a list;
+    fresh : ('a list -> 'a) option;
+    invar : ('a -> bool) option;
+    uid : int;
+  }
+
   let mem x s =
     List.exists (fun y -> y = x) s.enum
 
-  let add x s = 
+  let add x s =
     if mem x s then () else s.enum <- x::s.enum
 
   let elements s = s.enum
 
-  let gensym = let r = ref (-1) in fun () -> incr r; !r
+  let gensym =
+    let r = ref (-1) in
+    fun () -> incr r; !r
     
-  let declare eq = {eq; enum = []; fresh = None; invar = None; uid = gensym ()}
+  let declare eq = {
+    eq;
+    enum = [];
+    fresh = None;
+    invar = None;
+    uid = gensym ()
+  }
 
   (* generate a fresh type descriptor *)
   (* maybe we could remember what is the base type, so that if we run
@@ -46,47 +52,45 @@ module Ty = struct
       generated up to this point *)
   let for_all ty f =
     List.for_all f ty.enum
-      
 end
 
-type 'a ty = 'a Ty.t    
+type 'a ty = 'a Ty.t
 
-type (_,_) fn = 
+type (_,_) fn =
 | Constant : 'a ty -> ('a,'a) fn
 | Fun    : 'a ty * ('b, 'c) fn -> ('a -> 'b, 'c) fn;;
 
 let (@->) ty fd = Fun (ty,fd)
 let returning ty = Constant ty
 
-let rec eval : type a b. (a,b) fn -> a -> b list = 
-		     let open Ty in 
-		     fun fd f ->
-		       match fd with
-			 | Constant ty -> [f]
-			 | Fun (ty,fd) -> 
-			   List.flatten (List.map (fun e -> eval fd (f e)) (ty.enum))
-;;
+let (>>=) li f = List.flatten (List.map f li)
 
-let rec codom : type a b. (a,b) fn -> b ty = 
-		  function Fun (_,fd) -> codom fd
-		  | Constant ty -> ty
+let rec eval : type a b. (a,b) fn -> a -> b list =
+  let open Ty in
+  fun fd f ->
+    match fd with
+    | Constant ty -> [f]
+    | Fun (ty,fd) -> ty.enum >>= fun e -> eval fd (f e)
 
-let use fd f = 
-  let prod = eval fd f in 
-  let ty = codom fd in 
+let rec codom : type a b. (a,b) fn -> b ty =
+  function
+    | Fun (_,fd) -> codom fd
+    | Constant ty -> ty
+
+let use fd f =
+  let prod = eval fd f in
+  let ty = codom fd in
   List.iter (fun x -> Ty.add x ty) prod;
   ()
 
-
-let populate n ty = 
-  let open Ty in 
+let populate n ty =
+  let open Ty in
   match ty.fresh with
     | None -> invalid_arg "populate"
-    | Some fresh -> 
+    | Some fresh ->
       for i = 0 to n - 1 do
-	ty.enum <- fresh (ty.enum) :: ty.enum
+        ty.enum <- fresh ty.enum :: ty.enum
       done
-;;
 
 module Sig = struct
   type elem = Elem : ('a,'b) fn * 'a -> elem
@@ -94,52 +98,36 @@ module Sig = struct
   type ident = string
   type t = (ident * elem) list 
 
-  let empty = []
-
-  let add s (id: ident) fd f =
-    (id, Elem (fd,f))::s
+  let val_ id fd f = (id, Elem (fd, f))
 end
 
+let ncheck n (s: Sig.t) = 
+  for i = 1 to n do
+    List.iter (fun (_id, Sig.Elem (fd, f)) -> use fd f) s;
+  done      
 
-let rec ncheck n (s: Sig.t) = 
-  if n = 0 
-  then ()
-  else 
-    (    
-      List.iter (fun (id,d) ->
-	match d with Sig.Elem (fd,f) -> use fd f	  
-      ) s; 
-      ncheck (n-1) s
-    )
-      
-
-(* Example: sorted lists *)
-module IList = struct
-
+(* Example: Sorted integer lists *)
+module SIList = struct
   type t = int list
 
   let empty = []
 
-  let rec add x = function 
+  let rec add x = function
     | [] -> [x]
     | t::q -> if t < x then t :: add x q else x::t::q
-
 end
- 
 
-let si_t : IList.t ty = Ty.(declare (=))
+let si_t : SIList.t ty = Ty.(declare (=))
 let int_t : int ty = Ty.(declare (=) & (fun _ -> Random.int 1000))
-let _ = populate 10 int_t
+let () = populate 10 int_t
 
+let silist_sig = Sig.([
+  val_ "empty" (returning si_t) SIList.empty;
+  va_ "add" (int_t @-> si_t @-> returning si_t) SIList.add;
+])
 
-let s = Sig.empty 
-let s = Sig.add s "empty" (returning si_t) IList.empty
-let s = Sig.add s "add" (int_t @-> si_t @-> returning si_t) IList.add
+let () =  ncheck 5 silist_sig
 
-let _ =  ncheck  5 s;;
-
-let _ = Ty.for_all si_t (fun s -> List.sort Pervasives.compare s = s);;  
-
-
-
-
+let () =
+  let prop s = List.sort Pervasives.compare s = s in
+  assert (Ty.for_all si_t prop)
