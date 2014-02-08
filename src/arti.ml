@@ -18,7 +18,7 @@ module Ty = struct
   let gensym =
     let r = ref (-1) in
     fun () -> incr r; !r
-    
+
   let declare eq = {
     eq;
     enum = [];
@@ -36,11 +36,11 @@ module Ty = struct
     {ty with uid = gensym (); invar}
 
   (* tag a type with a generator, without generating a fresh type descriptor *)
-  let (&) ty fresh = 
+  let (&) ty fresh =
     match ty.fresh with
-      | None -> 
+      | None ->
 	{ty with fresh = Some fresh}
-      | Some _ -> 
+      | Some _ ->
 	invalid_arg "fresh"
 
   (** Check a property overall the elements of ['a ty] that were
@@ -91,15 +91,15 @@ module Sig = struct
   type elem = Elem : ('a,'b) fn * 'a -> elem
 
   type ident = string
-  type t = (ident * elem) list 
+  type t = (ident * elem) list
 
   let val_ id fd f = (id, Elem (fd, f))
 end
 
-let ncheck n (s: Sig.t) = 
+let ncheck n (s: Sig.t) =
   for i = 1 to n do
     List.iter (fun (_id, Sig.Elem (fd, f)) -> use fd f) s;
-  done      
+  done
 
 (* Example: Sorted integer lists *)
 module SIList = struct
@@ -131,25 +131,25 @@ let () =
 
 module RBT = struct
 
-  type key = int 
-  type t = | Red of t * key * t 
+  type key = int
+  type t = | Red of t * key * t
 	   | Black of t * key  * t
 	   | Empty
 
-	       
+
   let empty = Empty
   let rec mem x = function
     | Empty -> false
-    | Black (l,v,r) | Red (l,v,r) -> 
+    | Black (l,v,r) | Red (l,v,r) ->
       begin
 	match compare x v with
-	| -1 -> mem x l 
+	| -1 -> mem x l
 	| 0 -> true
 	| _ -> mem x r
       end
 
-  let black = function 
-    | Red (l,v,r) -> Black (l,v,r) 
+  let black = function
+    | Red (l,v,r) -> Black (l,v,r)
     | n -> n
 
   let balance = function
@@ -160,26 +160,26 @@ module RBT = struct
     | Black (t1, x1, Red (t2, x2, Red (t3, x3, t4))) ->
       Red (Black (t1,x1,t2),x2, Black (t3,x3,t4))
     | Black (t1, x1, Red (Red (t2,x2,t3), x3, t4)) ->
-      Red (Black (t1,x1, t2), x2, Black (t3,x3,t4)) 
+      Red (Black (t1,x1, t2), x2, Black (t3,x3,t4))
     | n -> n
 
-  let rec insert x = function 
+  let rec insert x = function
     | Empty -> Red (Empty, x, Empty)
-    | Red (l,v,r) -> 
-      if x <= v 
+    | Red (l,v,r) ->
+      if x <= v
       then (Red (insert x l, v, r))
       else (Red (l, v, insert x r))
-    | Black (l,v,r) -> 
-      if x <= v 
+    | Black (l,v,r) ->
+      if x <= v
       then balance (Black (insert x l, v, r))
       else balance (Black (l, v, insert x r))
-    
-  let insert x n = black (insert x n) 
-  
-  let rec elements = function 
+
+  let insert x n = black (insert x n)
+
+  let rec elements = function
     | Empty -> []
     | Black (l,v,r) -> elements l @ (v::elements r)
-    | Red (l,v,r) -> elements l @ (v::elements r)      
+    | Red (l,v,r) -> elements l @ (v::elements r)
 
   let is_black = function
     | Red _ -> false
