@@ -132,11 +132,10 @@ let () =
 
 module RBT = struct
 
-  type key = int
   type color = R | B
-  type t = | T of color * t * key * t
-	   | Empty
-
+  type 'a t =
+  | Empty
+  | T of color * 'a t * 'a * 'a t
 
   let empty = Empty
   let rec mem x = function
@@ -204,13 +203,13 @@ module RBT = struct
       is_black t
     with Exit -> false
 
-  type zipper = frame list
+  type 'a zipper = 'a frame list
   and direction = Left | Right
-  and frame = {
+  and 'a frame = {
     col : color;
     dir : direction;
-    v : key;
-    sibling : t;
+    v : 'a;
+    sibling : 'a t;
   }
 
   let close_frame t frame =
@@ -242,7 +241,7 @@ module RBT = struct
       | Some (t, frame) -> Some (t, frame::zip)
 end
 
-let rbt_t : RBT.t ty = Ty.(declare (=))
+let rbt_t : int RBT.t ty = Ty.(declare (=))
 let int_t : int ty = Ty.(declare (=) & (fun _ -> Random.int 10))
 let () = populate 5 int_t
 
