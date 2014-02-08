@@ -187,8 +187,8 @@ end
 
 
 let rbt_t : RBT.t ty = Ty.(declare (=))
-let int_t : int ty = Ty.(declare (=) & (fun _ -> Random.int 1000))
-let () = populate 10 int_t
+let int_t : int ty = Ty.(declare (=) & (fun _ -> Random.int 10))
+let () = populate 5 int_t
 
 let rbt_sig = Sig.([
   val_ "empty" (returning rbt_t) RBT.empty;
