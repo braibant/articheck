@@ -203,9 +203,44 @@ module RBT = struct
       ignore (check_black_height t);
       is_black t
     with Exit -> false
+
+  type zipper = frame list
+  and direction = Left | Right
+  and frame = {
+    col : color;
+    dir : direction;
+    v : key;
+    sibling : t;
+  }
+
+  let close_frame t frame =
+    let t = match frame with
+      | {dir = Left; col; v; sibling} -> T (col, t, v, sibling)
+      | {dir = Right; col; v; sibling} -> T (col, sibling, v, t) in
+    (* balancing here is crucial to preserve the rbtree invariants! *)
+    balance t
+
+  let zip_open t = (t, [])
+
+  let zip_close (t, frames) =
+    List.fold_left close_frame t frames
+
+  let move_up (t, zip) = match zip with
+    | [] -> None
+    | frame::zip -> Some (close_frame t frame, zip)
+
+  let move_frame dir t = match t with
+    | Empty -> None
+    | T (col, l, v, r) ->
+      match dir with
+        | Left -> Some (l, {dir; col; v; sibling = r})
+        | Right -> Some (r, {dir; col; v; sibling = l})
+
+  let move dir (t, zip) =
+    match move_frame dir t with
+      | None -> None
+      | Some (t, frame) -> Some (t, frame::zip)
 end
-
-
 
 let rbt_t : RBT.t ty = Ty.(declare (=))
 let int_t : int ty = Ty.(declare (=) & (fun _ -> Random.int 10))
