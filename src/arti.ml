@@ -27,6 +27,9 @@ module Ty = struct
     uid = gensym ()
   }
 
+  let finite eq enum =
+    { (declare eq) with enum }
+
   (* generate a fresh type descriptor *)
   (* maybe we could remember what is the base type, so that if we run
      out of elements for the new type, we could generate new instances of
@@ -276,10 +279,45 @@ let rbt_sig = Sig.([
   val_ "insert" (int_t @-> rbt_t @-> returning rbt_t) RBT.insert;
 ])
 
-let () =  ncheck 5 rbt_sig
+let () = ncheck 5 rbt_sig
 
 let () =
   let prop s = let s = RBT.elements s in List.sort Pervasives.compare s = s in
   assert (Ty.counter_example rbt_t prop = None);
   assert (Ty.counter_example rbt_t RBT.is_balanced = None);
   ()
+
+let dir_t : RBT.direction ty = Ty.finite (=) RBT.([Left; Right])
+let rbtopt_t : int RBT.t option ty = Ty.(declare (=))
+let ptropt_t : int RBT.pointer option ty = Ty.(declare (=))
+
+let zip_sig = RBT.(rbt_sig @ Sig.([
+  val_ "Some" (rbt_t @-> returning rbtopt_t)
+    (fun z -> Some z);
+  val_ "some zip_open" (rbt_t @-> returning ptropt_t)
+    (fun v -> Some (zip_open v));
+  val_ "some zip_close" (ptropt_t @-> returning rbtopt_t)
+    (function None -> None | Some v -> Some (zip_close v));
+
+  val_ "move_up" (ptropt_t @-> returning ptropt_t)
+    (function None -> None | Some v -> move_up v);
+  val_ "move" (dir_t @-> ptropt_t @-> returning ptropt_t)
+    (fun dir -> function None -> None | Some v -> move dir v);
+
+  val_ "read" (ptropt_t @-> returning rbtopt_t)
+    (function None -> None | Some (t, _zip) -> Some t);
+
+  val_ "write" (ptropt_t @-> rbtopt_t @-> returning ptropt_t)
+    (fun ptr t -> match ptr, t with
+      | None, _ | _, None -> None
+      | Some (_, zip), Some t -> Some (t, zip));
+]))
+
+(* takes about 30 seconds on my machine! *)
+let () = ncheck 2 zip_sig
+
+let () =
+  let prop = function
+    | None -> true
+    | Some v -> RBT.is_balanced v in
+  assert (Ty.counter_example rbtopt_t prop = None)
