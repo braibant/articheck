@@ -130,8 +130,32 @@ let () =
   ()
 
 
-module RBT = struct
+module type RBT = sig
+  (* private types to enforce abstraction
+     but keep pretty-printing in the toplevel *)
+  type color = private R | B
+  type 'a t = private
+  | Empty
+  | T of color * 'a t * 'a * 'a t
 
+  val empty : 'a t
+  val insert : 'a -> 'a t -> 'a t
+  val elements : 'a t -> 'a list
+  val is_balanced : 'a t -> bool
+
+  (* public type, part of the user interface for the 'move' function *)
+  type direction = Left | Right
+  type 'a zipper
+  type 'a pointer = 'a t * 'a zipper
+
+  val zip_open : 'a t -> 'a pointer
+  val zip_close : 'a pointer -> 'a t
+
+  val move_up : 'a pointer -> 'a pointer option
+  val move : direction -> 'a pointer -> 'a pointer option
+end
+
+module RBT : RBT  = struct
   type color = R | B
   type 'a t =
   | Empty
@@ -211,6 +235,8 @@ module RBT = struct
     v : 'a;
     sibling : 'a t;
   }
+
+  type 'a pointer = 'a t * 'a zipper
 
   let close_frame t frame =
     let t = match frame with
