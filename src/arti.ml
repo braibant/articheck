@@ -76,11 +76,20 @@ let rec codom : type a b. (a,b) fn -> b ty =
     | Fun (_,fd) -> codom fd
     | Constant ty -> ty
 
+let blows_after_n exn n =
+  let count = ref 0 in
+  fun () ->
+    incr count;
+    if !count > n then raise exn
+
 let use fd f =
   let prod = eval fd f in
   let ty = codom fd in
-  List.iter (fun x -> Ty.add x ty) prod;
-  ()
+  let tick = blows_after_n Exit 1000 in
+  (* [Gabriel] I had to use this for ncheck to terminate in finite
+     time on large signatures *)
+  try List.iter (fun x -> tick (); Ty.add x ty) prod;
+  with Exit -> ()
 
 let populate n ty =
   let open Ty in
@@ -313,8 +322,7 @@ let zip_sig = RBT.(rbt_sig @ Sig.([
       | Some (_, zip), Some t -> Some (t, zip));
 ]))
 
-(* takes about 30 seconds on my machine! *)
-let () = ncheck 2 zip_sig
+let () = ncheck 1 zip_sig
 
 let () =
   let prop = function
