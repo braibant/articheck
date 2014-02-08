@@ -45,8 +45,9 @@ module Ty = struct
 
   (** Check a property overall the elements of ['a ty] that were
       generated up to this point *)
-  let for_all ty f =
-    List.for_all f ty.enum
+  let counter_example ty f =
+    try Some (List.find (fun e -> not (f e)) ty.enum)
+    with Not_found -> None
 end
 
 type 'a ty = 'a Ty.t
@@ -125,7 +126,7 @@ let () =  ncheck 5 silist_sig
 
 let () =
   let prop s = List.sort Pervasives.compare s = s in
-  assert (Ty.for_all si_t prop);
+  assert (Ty.counter_example si_t prop = None);
   ()
 
 
@@ -219,6 +220,6 @@ let () =  ncheck 5 rbt_sig
 
 let () =
   let prop s = let s = RBT.elements s in List.sort Pervasives.compare s = s in
-  assert (Ty.for_all rbt_t prop);
-  assert (Ty.for_all rbt_t RBT.is_balanced);
+  assert (Ty.counter_example rbt_t prop = None);
+  assert (Ty.counter_example rbt_t RBT.is_balanced = None);
   ()
