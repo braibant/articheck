@@ -181,7 +181,41 @@ module RBT = struct
     | Black (l,v,r) -> elements l @ (v::elements r)
     | Red (l,v,r) -> elements l @ (v::elements r)      
 
+  let is_black = function
+    | Red _ -> false
+    | Empty | Black _ -> true
 
+
+(* http://en.wikipedia.org/wiki/Red-black_tree, simplified:
+
+  In addition to the requirements imposed on a binary search tree the
+  following must be satisfied by a red–black tree:
+
+  - The root is black.
+  - Every red node must have two black child nodes.
+  - Every path from a given node to any of its descendant leaves
+    contains the same number of black nodes.
+*)
+  let is_balanced t =
+      let rec black_height = function
+        | Empty -> 0
+        | Black (l, _, r) ->
+          let bhl = black_height l in
+          let bhr = black_height r in
+          if bhl <> bhr then raise Exit;
+          bhl + 1
+        | Red (l, _, r) ->
+          if not (is_black l && is_black r) then raise Exit;
+          let bhl = black_height l in
+          let bhr = black_height r in
+          if bhl <> bhr then raise Exit;
+          bhl
+      in
+    try
+      if not (is_black t) then raise Exit;
+      ignore (black_height t);
+      true
+    with Exit -> false
 end
 
 
@@ -200,4 +234,5 @@ let () =  ncheck 5 rbt_sig
 let () =
   let prop s = let s = RBT.elements s in List.sort Pervasives.compare s = s in
   assert (Ty.for_all rbt_t prop);
+  assert (Ty.for_all rbt_t RBT.is_balanced);
   ()
