@@ -145,10 +145,10 @@ let () =
 module type RBT = sig
   (* private types to enforce abstraction
      but keep pretty-printing in the toplevel *)
-  type color = private R | B
   type 'a t = private
   | Empty
-  | T of color * 'a t * 'a * 'a t
+  | Red of 'a t * 'a * 'a t
+  | Black of 'a t * 'a * 'a t
 
   val empty : 'a t
   val insert : 'a -> 'a t -> 'a t
@@ -168,15 +168,15 @@ module type RBT = sig
 end
 
 module RBT : RBT  = struct
-  type color = R | B
   type 'a t =
   | Empty
-  | T of color * 'a t * 'a * 'a t
+  | Red of 'a t * 'a * 'a t
+  | Black of 'a t * 'a * 'a t
 
   let empty = Empty
   let rec mem x = function
     | Empty -> false
-    | T (_col,l,v,r) ->
+    | Red (l,v,r) | Black (l,v,r) ->
       begin
 	match compare x v with
 	| -1 -> mem x l
@@ -185,35 +185,40 @@ module RBT : RBT  = struct
       end
 
   let blacken = function
-    | T (R, l,v,r) -> T (B, l,v,r)
-    | (Empty | T (B, _, _, _)) as n -> n
+    | Red (l,v,r) -> Black (l,v,r)
+    | (Empty | Black _) as n -> n
 
   let balance = function
-    | T (B, (T (R, T (R, a, x, b), y, c       )
-                 | T (R, a, x, T (R, b, y, c))), z, d)
-    | T (B, a, x, (T (R, T (R, b, y, c), z, d)
-                 | T (R, b, y, T (R, c, z, d))))
-      -> T (R, T (B, a, x, b), y, T (B, c, z, d))
+    | Black ((Red (Red (a, x, b), y, c)
+            | Red (a, x, Red (b, y, c))), z, d)
+    | Black (a, x, (Red (Red (b, y, c), z, d)
+                  | Red (b, y, Red (c, z, d))))
+      -> Red (Black (a, x, b), y, Black (c, z, d))
     | n -> n
 
+  let is_black = function
+    | Red _ -> false
+    | Empty | Black _ -> true
+
+  let mk black l v r =
+    if black then Black (l, v, r)
+    else Red (l, v, r)
+
   let insert x n =
-    let rec insert x = function
-      | Empty -> T (R, Empty, x, Empty)
-      | T (col, l,v,r) ->
+    let rec insert x t = match t with
+      | Empty -> Red (Empty, x, Empty)
+      | Red (l,v,r) | Black (l,v,r) ->
         let l, r =
           if x <= v
           then insert x l, r
           else l, insert x r in
-        balance (T (col, l, v, r))
+        balance (mk (is_black t) l v r)
     in blacken (insert x n)
 
   let rec elements = function
     | Empty -> []
-    | T (_col,l,v,r) -> elements l @ (v::elements r)
-
-  let is_black = function
-    | T (R, _, _, _) -> false
-    | Empty | T (B, _, _, _) -> true
+    | Red (l,v,r) | Black (l, v, r) ->
+      elements l @ (v::elements r)
 
 (* http://en.wikipedia.org/wiki/Red-black_tree, simplified:
 
@@ -226,13 +231,13 @@ module RBT : RBT  = struct
     contains the same number of black nodes.
 *)
   let is_balanced t =
-      let rec check_black_height = function
+      let rec check_black_height t = match t with
         | Empty -> 0
-        | T (col, l, _, r) ->
+        | Red (l, _, r) | Black (l, _, r) ->
           let bhl = check_black_height l in
           let bhr = check_black_height r in
           if bhl <> bhr then raise Exit;
-          bhl + (match col with B -> 1 | R -> 0)
+          bhl + (if is_black t then 1 else 0)
       in
     try
       ignore (check_black_height t);
@@ -242,7 +247,7 @@ module RBT : RBT  = struct
   type 'a zipper = 'a frame list
   and direction = Left | Right
   and 'a frame = {
-    col : color;
+    is_black : bool;
     dir : direction;
     v : 'a;
     sibling : 'a t;
@@ -252,8 +257,8 @@ module RBT : RBT  = struct
 
   let close_frame t frame =
     let t = match frame with
-      | {dir = Left; col; v; sibling} -> T (col, t, v, sibling)
-      | {dir = Right; col; v; sibling} -> T (col, sibling, v, t) in
+      | {dir = Left; is_black; v; sibling} -> mk is_black t v sibling
+      | {dir = Right; is_black; v; sibling} -> mk is_black sibling v t in
     (* balancing here is crucial to preserve the rbtree invariants! *)
     balance t
 
@@ -268,10 +273,11 @@ module RBT : RBT  = struct
 
   let move_frame dir t = match t with
     | Empty -> None
-    | T (col, l, v, r) ->
+    | Red (l, v, r) | Black (l, v, r) ->
+      let is_black = is_black t in
       match dir with
-        | Left -> Some (l, {dir; col; v; sibling = r})
-        | Right -> Some (r, {dir; col; v; sibling = l})
+        | Left -> Some (l, {dir; is_black; v; sibling = r})
+        | Right -> Some (r, {dir; is_black; v; sibling = l})
 
   let move dir (t, zip) =
     match move_frame dir t with
