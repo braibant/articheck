@@ -132,15 +132,15 @@ let () =
 module RBT = struct
 
   type key = int
-  type t = | Red of t * key * t
-	   | Black of t * key  * t
+  type color = R | B
+  type t = | T of color * t * key * t
 	   | Empty
 
 
   let empty = Empty
   let rec mem x = function
     | Empty -> false
-    | Black (l,v,r) | Red (l,v,r) ->
+    | T (_col,l,v,r) ->
       begin
 	match compare x v with
 	| -1 -> mem x l
@@ -148,43 +148,36 @@ module RBT = struct
 	| _ -> mem x r
       end
 
-  let black = function
-    | Red (l,v,r) -> Black (l,v,r)
-    | n -> n
+  let blacken = function
+    | T (R, l,v,r) -> T (B, l,v,r)
+    | (Empty | T (B, _, _, _)) as n -> n
 
   let balance = function
-    | Black (Red (Red (t1,x1,t2), x2, t3), x3, t4) ->
-      Red (Black (t1, x1, t2) , x2, Black (t3, x3, t4))
-    | Black (Red (t1,x1, Red (t2,x2,t3)), x3, t4) ->
-      Red( Black (t1, x1, t2), x2, Black(t3, x3, t4))
-    | Black (t1, x1, Red (t2, x2, Red (t3, x3, t4))) ->
-      Red (Black (t1,x1,t2),x2, Black (t3,x3,t4))
-    | Black (t1, x1, Red (Red (t2,x2,t3), x3, t4)) ->
-      Red (Black (t1,x1, t2), x2, Black (t3,x3,t4))
+    | T (B, (T (R, T (R, a, x, b), y, c       )
+                 | T (R, a, x, T (R, b, y, c))), z, d)
+    | T (B, a, x, (T (R, T (R, b, y, c), z, d)
+                 | T (R, b, y, T (R, c, z, d))))
+      -> T (R, T (B, a, x, b), y, T (B, c, z, d))
     | n -> n
 
-  let rec insert x = function
-    | Empty -> Red (Empty, x, Empty)
-    | Red (l,v,r) ->
-      if x <= v
-      then (Red (insert x l, v, r))
-      else (Red (l, v, insert x r))
-    | Black (l,v,r) ->
-      if x <= v
-      then balance (Black (insert x l, v, r))
-      else balance (Black (l, v, insert x r))
-
-  let insert x n = black (insert x n)
+  let insert x n =
+    let rec insert x = function
+      | Empty -> T (R, Empty, x, Empty)
+      | T (col, l,v,r) ->
+        let l, r =
+          if x <= v
+          then insert x l, r
+          else l, insert x r in
+        balance (T (col, l, v, r))
+    in blacken (insert x n)
 
   let rec elements = function
     | Empty -> []
-    | Black (l,v,r) -> elements l @ (v::elements r)
-    | Red (l,v,r) -> elements l @ (v::elements r)
+    | T (_col,l,v,r) -> elements l @ (v::elements r)
 
   let is_black = function
-    | Red _ -> false
-    | Empty | Black _ -> true
-
+    | T (R, _, _, _) -> false
+    | Empty | T (B, _, _, _) -> true
 
 (* http://en.wikipedia.org/wiki/Red-black_tree, simplified:
 
@@ -197,24 +190,17 @@ module RBT = struct
     contains the same number of black nodes.
 *)
   let is_balanced t =
-      let rec black_height = function
+      let rec check_black_height = function
         | Empty -> 0
-        | Black (l, _, r) ->
-          let bhl = black_height l in
-          let bhr = black_height r in
+        | T (col, l, _, r) ->
+          let bhl = check_black_height l in
+          let bhr = check_black_height r in
           if bhl <> bhr then raise Exit;
-          bhl + 1
-        | Red (l, _, r) ->
-          if not (is_black l && is_black r) then raise Exit;
-          let bhl = black_height l in
-          let bhr = black_height r in
-          if bhl <> bhr then raise Exit;
-          bhl
+          bhl + (match col with B -> 1 | R -> 0)
       in
     try
-      if not (is_black t) then raise Exit;
-      ignore (black_height t);
-      true
+      ignore (check_black_height t);
+      is_black t
     with Exit -> false
 end
 
