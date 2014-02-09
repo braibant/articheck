@@ -71,7 +71,6 @@ module Ty = struct
   let counter_example ty f =
     try Some (List.find (fun e -> not (f e)) ty.enum)
     with Not_found -> None
-
 end
 
 (* -------------------------------------------------------------------------- *)
@@ -81,40 +80,103 @@ end
 (** The type of our type descriptors. *)
 type 'a ty = 'a Ty.t
 
-(** The GADT [('b, 'a) fn] describes functions of type ['b] whose return type is
- * ['a].
- * - The base case is constant values: they have type ['a] and return ['a].
- * - The other case is an arrow: from a function with type ['b] that returns
- *   ['c], we can construct a function of type ['a -> 'b] which still returns
- *   ['c].
- * We attach to each branch a descriptor of the argument type ['a].
- *)
-type (_,_) fn =
-| Constant : 'a ty -> ('a,'a) fn
-| Fun      : 'a ty * ('b, 'c) fn -> ('a -> 'b, 'c) fn;;
+(** OCaml has built-in syntax for product types (tuples), but not for
+    sum types. *)
+type ('a, 'b) sum =
+| L of 'a
+| R of 'b
+
+(** The GADT [('ty, 'head) negative] describes currified functions of
+ * type ['ty] whose return datatype is a positive type ['head]. The
+ * words "negative" (for functions) and "positive" (for products
+ * and sums) comes from focusing, a point of view that is surprisingly
+ * adapted here.
+ *
+ * - the [Fun] constructor models function types [P -> N], where [P] is
+ * a positive type and [N] is negative (functions returned by functions
+ * corresponds to currification). The return type of [P -> N], as
+ * a currified function, is the return type of [N].
+ *
+ * - the [Ret] constructor corresponds to the final end of
+ * a multi-arrow function type, or to 0-ary functions. It takes
+ * a positive datatype (in focusing terms, it is the "shift" that
+ * embeds positives into negatives).  *)
+type (_, _) negative =
+| Fun : 'a positive * ('b, 'c) negative -> ('a -> 'b, 'c) negative
+| Ret : 'a positive -> ('a, 'a) negative
+
+(** The GADT ['a positive] describes first-order datatypes (sums,
+    products and atomic types) of type ['a].
+
+    Note that there is no embedding of negatives into positives: our
+    functions are first-orders and cannot take functions as arguments
+    themselves. In logic, this corresponds to the restriction from all
+    propositions to Horn Clauses, which have good proof-search
+    properties.
+
+    It may be possible to later remove this limitation to the type
+    language, but it could be fairly difficult.
+*)
+and _ positive =
+| Ty : 'a ty -> 'a positive
+| Sum : 'a positive * 'b positive -> ('a, 'b) sum positive
+| Prod : 'a positive  * 'b positive -> ('a * 'b) positive
+
+(** Recursively find the positive head of a negative type *)
+let rec codom : type a b. (a,b) negative -> b positive = function
+  | Fun (_,fd) -> codom fd
+  | Ret ty -> ty
 
 (** Some constructors for our GADT. *)
 
-let (@->) ty fd = Fun (ty,fd)
-let returning ty = Constant ty
+let (@->) a b = Fun (a,b)
+let (+@) a b = Sum (a, b)
+let ( *@ ) a b = Prod (a, b)
 
-let (>>=) li f = List.flatten (List.map f li)
+(** Auxiliary functions on lists *)
+let concat_map f li = List.flatten (List.map f li)
+let cartesian_product la lb =
+  let rec prod acc = function
+    | [] -> acc
+    | b::lb ->
+      let lab = List.rev_map (fun a -> (a, b)) la in
+      prod (List.rev_append lab acc) lb
+  in prod [] lb
 
-(** Given an description of functions of type [a] which return [b], and given an
- * initial element [a], generate all possible [b]s. This is the core function of
- * this module. *)
-let rec eval : type a b. (a,b) fn -> a -> b list =
-  fun fd f ->
-    match fd with
-    | Constant _ -> [f]
-    | Fun (ty,fd) -> ty.Ty.enum >>= fun e -> eval fd (f e)
+(** Now comes the reason for separating positives and negatives in two
+    distinct groups: they are used in very different ways to produce
+    new elements.
 
-(** Recursively find the descriptor that corresponds to the codomain of a
- * function. *)
-let rec codom : type a b. (a,b) fn -> b ty =
-  function
-    | Fun (_,fd) -> codom fd
-    | Constant ty -> ty
+    When available, a function of type [a], described as a [(a, b)
+    negative], can be applied to deduce new values of type [b]. This
+    requires producing known values for its (positive) arguments.
+*)
+let rec apply : type a b . (a, b) negative -> a -> b list =
+  fun ty v -> match ty with
+    | Ret pos -> [v]
+    | Fun (p, n) -> produce p |> concat_map (fun a -> apply n (v a))
+and produce : type a . a positive -> a list = function
+  | Ty ty -> ty.Ty.enum
+  | Prod (pa, pb) -> cartesian_product (produce pa) (produce pb)
+  | Sum (pa, pb) ->
+    let la = List.rev_map (fun v -> L v) (produce pa) in
+    let lb = List.rev_map (fun v -> R v) (produce pb) in
+    List.rev_append la lb
+
+(** A positive datatype can be destructed by pattern-matching to
+    discover new values for the atomic types at its leaves. *)
+let rec destruct : type a . a positive -> a -> unit = function
+  | Ty ty -> begin fun v -> Ty.add v ty end
+  | Prod (ta, tb) ->
+    begin fun (a, b) ->
+      destruct ta a;
+      destruct tb b;
+    end
+  | Sum (ta, tb) ->
+    begin function
+      | L a -> destruct ta a
+      | R b -> destruct tb b
+    end
 
 
 (* -------------------------------------------------------------------------- *)
@@ -134,13 +196,13 @@ let blows_after_n (exn: exn) (n: int): unit -> unit =
  * It [eval]s [fd] so as to generate a list of ['b]s, finds the descriptor of
  * type ['b], and then mutates it to stores all the elements we have constructed
  * (within a reasonable number, of course). *)
-let use (fd: ('a, 'b) fn) (f: 'a) =
-  let prod = eval fd f in
+let use (fd: ('a, 'b) negative) (f: 'a) =
+  let prod = apply fd f in
   let ty = codom fd in
   let tick = blows_after_n Exit 1000 in
   (* [Gabriel] I had to use this for ncheck to terminate in finite
      time on large signatures *)
-  try List.iter (fun x -> tick (); Ty.add x ty) prod;
+  try List.iter (fun x -> tick (); destruct ty x) prod;
   with Exit -> ()
 
 (** This function populates an existing type descriptor who has a built-in
@@ -161,7 +223,7 @@ let populate n ty =
 module Sig = struct
   (** An element from a module signature is a function of type ['a], along with
    * its descriptor. *)
-  type elem = Elem : ('a,'b) fn * 'a -> elem
+  type elem = Elem : ('a,'b) negative * 'a -> elem
 
   (** Elements have a name. *)
   type ident = string
@@ -182,6 +244,13 @@ let ncheck n (s: Sig.t) =
     List.iter (fun (_id, Sig.Elem (fd, f)) -> use fd f) s;
   done
 
+(** Check a property over all the elements of datatype that were
+ * generated up to this point. This function returns [Some x] where [x] is an
+ * element that fails to satisfy the property, and [None] is no such element
+ * exists. *)
+let counter_example ty f =
+  try Some (produce ty |> List.find (fun e -> not (f e)))
+  with Not_found -> None
 
 (* -------------------------------------------------------------------------- *)
 
@@ -199,22 +268,21 @@ module SIList = struct
     | t::q -> if t < x then t :: add x q else x::t::q
 end
 
-(** The description of the type of sorted integer lists. Elements of this type
- * can be compared using the polymorphic, structural comparison operator (=). *)
-let si_t : SIList.t ty = Ty.declare ()
+(** The description of the type of sorted integer lists. *)
+let si_t = Ty (Ty.declare () : SIList.t ty)
 
 (** Conversely, [int] is a ground type that can not only be compared with (=),
  * but also admits a generator. *)
-let int_t : int ty = Ty.declare ~fresh:(fun _ -> Random.int 1000) ()
-
-(** Populate the descriptor of the built-in type [int]. *)
-let () =
-  populate 10 int_t
+let int_t =
+  let ty : int ty = Ty.declare ~fresh:(fun _ -> Random.int 1000) () in
+  (** Populate the descriptor. *)
+  populate 10 ty;
+  Ty ty
 
 (** Use module [Sig] to build a description of the signature of [SIList]. *)
 let silist_sig = Sig.([
-  val_ "empty" (returning si_t) SIList.empty;
-  val_ "add" (int_t @-> si_t @-> returning si_t) SIList.add;
+  val_ "empty" (Ret si_t) SIList.empty;
+  val_ "add" (int_t @-> si_t @-> Ret si_t) SIList.add;
 ])
 
 (** Generate instances of [SIList.t]. *)
@@ -224,9 +292,10 @@ let () =
 (** The property that we wish to test for is that the lists are well-sorted. We
  * define a predicate for that purpose and assert that no counter-example can be
  * found. *)
+let is_sorted s = (List.sort Pervasives.compare s = s)
+
 let () =
-  let prop s = List.sort Pervasives.compare s = s in
-  assert (Ty.counter_example si_t prop = None);
+  assert (counter_example si_t is_sorted = None);
   ()
 
 
@@ -381,45 +450,52 @@ module RBT : RBT  = struct
       | Some (t, frame) -> Some (t, frame::zip)
 end
 
-let rbt_t : int RBT.t ty = Ty.declare ()
-let int_t : int ty = Ty.declare ~fresh:(fun _ -> Random.int 10) ()
-let () = populate 5 int_t
+let rbt_t = Ty (Ty.declare () : int RBT.t ty)
 
 let rbt_sig = Sig.([
-  val_ "empty" (returning rbt_t) RBT.empty;
-  val_ "insert" (int_t @-> rbt_t @-> returning rbt_t) RBT.insert;
+  val_ "empty" (Ret rbt_t) RBT.empty;
+  val_ "insert" (int_t @-> rbt_t @-> Ret rbt_t) RBT.insert;
 ])
 
 let () = ncheck 5 rbt_sig
 
 let () =
-  let prop s = let s = RBT.elements s in List.sort Pervasives.compare s = s in
-  assert (Ty.counter_example rbt_t prop = None);
-  assert (Ty.counter_example rbt_t RBT.is_balanced = None);
+  let is_sorted s = is_sorted (RBT.elements s) in
+  assert (counter_example rbt_t is_sorted = None);
+  assert (counter_example rbt_t RBT.is_balanced = None);
   ()
 
-let dir_t : RBT.direction ty = Ty.declare ~initial:RBT.([Left; Right]) ()
-let rbtopt_t : int RBT.t option ty = Ty.declare ()
-let ptropt_t : int RBT.pointer option ty = Ty.declare ()
+(** For now we'll represent [foo option] as [(foo, unit) sum], and
+    manually insert back and forth conversions; medium-term, type
+    descriptions should have a constructor to hide type bijections. *)
+type 'a structural_option = ('a, unit) sum
+
+let of_option = function
+  | Some v -> L v
+  | None -> R ()
+let to_option = function
+  | L v -> Some v
+  | R () -> None
+
+let unit_t = Ty (Ty.declare ~initial:[()] () : unit ty)
+let dir_t = Ty (Ty.declare ~initial:RBT.([Left; Right]) () : RBT.direction ty)
+let ptr_t = Ty (Ty.declare () : int RBT.pointer ty)
+
+let ptropt_t
+    : int RBT.pointer structural_option positive
+    = ptr_t +@ unit_t
 
 let zip_sig = RBT.(rbt_sig @ Sig.([
-  val_ "Some" (rbt_t @-> returning rbtopt_t)
-    (fun z -> Some z);
-  val_ "some zip_open" (rbt_t @-> returning ptropt_t)
-    (fun v -> Some (zip_open v));
-  val_ "some zip_close" (ptropt_t @-> returning rbtopt_t)
-    (function None -> None | Some v -> Some (zip_close v));
+  val_ "zip_open" (rbt_t @-> Ret ptr_t) zip_open;
+  val_ "zip_close" (ptr_t @-> Ret rbt_t) zip_close;
 
-  val_ "move_up" (ptropt_t @-> returning ptropt_t)
-    (function None -> None | Some v -> move_up v);
-  val_ "move" (dir_t @-> ptropt_t @-> returning ptropt_t)
-    (fun dir -> function None -> None | Some v -> move dir v);
+  val_ "move_up" (ptr_t @-> Ret ptropt_t)
+    (fun ptr -> move_up ptr |> of_option);
+  val_ "move" (dir_t @-> ptr_t @-> Ret ptropt_t)
+    (fun dir ptr -> move dir ptr |> of_option);
 ]))
 
-let () = ncheck 1 zip_sig
+let () = ncheck 2 zip_sig
 
 let () =
-  let prop = function
-    | None -> true
-    | Some v -> RBT.is_balanced v in
-  assert (Ty.counter_example rbtopt_t prop = None)
+  assert (counter_example rbt_t RBT.is_balanced = None)
