@@ -38,42 +38,31 @@ module Ty = struct
 
   (** Functions for creating new ['a t]s. *)
 
-  (** This function allows one to declare a new type descriptor, by providing its
-   * equality function. *)
-  let declare (eq: 'a -> 'a -> bool): 'a t = {
+  (** This function allows one to declare a new type descriptor. All the
+   * arguments are filled with sensible defaults. *)
+  let declare
+    ?(eq=(=))
+    ?(initial=[])
+    ?fresh
+    ?(invar = (fun _ -> true)) ()
+  : 'a t = {
     eq;
-    enum = [];
-    fresh = None;
-    invar = (fun _ -> true);
+    enum = initial;
+    fresh;
+    invar;
     uid = gensym ()
   }
 
-  (** This function allows one to create a new type descriptor, by giving an
-   * equality function along with an initial set of values. *)
-  let finite (eq: 'a -> 'a -> bool) (enum: 'a list): 'a t =
-    { (declare eq) with enum }
-
-  (** This function generates a new type descriptor along with an [invar].
-   *
-   * XXX: what is [invar]? this function is not used anywhere else in the code,
+  (* XXX: what is [invar]? this function is not used anywhere else in the code,
    * so it's hard to guess its purpose. Some original comments follow.
    *
    * generate a fresh type descriptor
    * maybe we could remember what is the base type, so that if we run
    * out of elements for the new type, we could generate new instances of
-   * the old one, and select the one that fulfill the invariant. *)
+   * the old one, and select the one that fulfill the invariant.
   let (/) ty invar =
     let invar x = invar x && ty.invar x in
-    {ty with uid = gensym (); invar}
-
-  (** Attach a generator of elements of type ['a] to an already existing ['a t].
-   * Please note that the ['a t] must not possess a generator already. *)
-  let (&) ty fresh =
-    match ty.fresh with
-      | None ->
-	{ty with fresh = Some fresh}
-      | Some _ ->
-	invalid_arg "fresh"
+    {ty with uid = gensym (); invar} *)
 
   (** Check a property over all the elements of ['a ty] that were
    * generated up to this point. This function returns [Some x] where [x] is an
@@ -157,7 +146,7 @@ let use (fd: ('a, 'b) fn) (f: 'a) =
 (** This function populates an existing type descriptor who has a built-in
  * generator by calling repeatedly the said generator. *)
 let populate n ty =
-  match ty.fresh with
+  match ty.Ty.fresh with
     | None -> invalid_arg "populate"
     | Some fresh ->
       for __ = 0 to n - 1 do
@@ -212,11 +201,11 @@ end
 
 (** The description of the type of sorted integer lists. Elements of this type
  * can be compared using the polymorphic, structural comparison operator (=). *)
-let si_t : SIList.t ty = Ty.(declare (=))
+let si_t : SIList.t ty = Ty.declare ()
 
 (** Conversely, [int] is a ground type that can not only be compared with (=),
  * but also admits a generator. *)
-let int_t : int ty = Ty.(declare (=) & (fun _ -> Random.int 1000))
+let int_t : int ty = Ty.declare ~fresh:(fun _ -> Random.int 1000) ()
 
 (** Populate the descriptor of the built-in type [int]. *)
 let () =
@@ -392,8 +381,8 @@ module RBT : RBT  = struct
       | Some (t, frame) -> Some (t, frame::zip)
 end
 
-let rbt_t : int RBT.t ty = Ty.(declare (=))
-let int_t : int ty = Ty.(declare (=) & (fun _ -> Random.int 10))
+let rbt_t : int RBT.t ty = Ty.declare ()
+let int_t : int ty = Ty.declare ~fresh:(fun _ -> Random.int 10) ()
 let () = populate 5 int_t
 
 let rbt_sig = Sig.([
@@ -409,9 +398,9 @@ let () =
   assert (Ty.counter_example rbt_t RBT.is_balanced = None);
   ()
 
-let dir_t : RBT.direction ty = Ty.finite (=) RBT.([Left; Right])
-let rbtopt_t : int RBT.t option ty = Ty.(declare (=))
-let ptropt_t : int RBT.pointer option ty = Ty.(declare (=))
+let dir_t : RBT.direction ty = Ty.declare ~initial:RBT.([Left; Right]) ()
+let rbtopt_t : int RBT.t option ty = Ty.declare ()
+let ptropt_t : int RBT.pointer option ty = Ty.declare ()
 
 let zip_sig = RBT.(rbt_sig @ Sig.([
   val_ "Some" (rbt_t @-> returning rbtopt_t)
