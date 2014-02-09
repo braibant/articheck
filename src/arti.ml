@@ -196,13 +196,15 @@ module RBT : RBT  = struct
       -> Red (Black (a, x, b), y, Black (c, z, d))
     | n -> n
 
-  let is_black = function
-    | Red _ -> false
-    | Empty | Black _ -> true
+  type color = R | B
 
-  let mk black l v r =
-    if black then Black (l, v, r)
-    else Red (l, v, r)
+  let color = function
+    | Red _ -> R
+    | Empty | Black _ -> B
+
+  let mk col l v r = match col with
+    | B -> Black (l, v, r)
+    | R -> Red (l, v, r)
 
   let insert x n =
     let rec insert x t = match t with
@@ -212,7 +214,7 @@ module RBT : RBT  = struct
           if x <= v
           then insert x l, r
           else l, insert x r in
-        balance (mk (is_black t) l v r)
+        balance (mk (color t) l v r)
     in blacken (insert x n)
 
   let rec elements = function
@@ -237,17 +239,17 @@ module RBT : RBT  = struct
           let bhl = check_black_height l in
           let bhr = check_black_height r in
           if bhl <> bhr then raise Exit;
-          bhl + (if is_black t then 1 else 0)
+          bhl + (match color t with B -> 1 | R -> 0)
       in
     try
       ignore (check_black_height t);
-      is_black t
+      color t = B
     with Exit -> false
 
   type 'a zipper = 'a frame list
   and direction = Left | Right
   and 'a frame = {
-    is_black : bool;
+    col : color;
     dir : direction;
     v : 'a;
     sibling : 'a t;
@@ -257,8 +259,8 @@ module RBT : RBT  = struct
 
   let close_frame t frame =
     let t = match frame with
-      | {dir = Left; is_black; v; sibling} -> mk is_black t v sibling
-      | {dir = Right; is_black; v; sibling} -> mk is_black sibling v t in
+      | {dir = Left; col; v; sibling} -> mk col t v sibling
+      | {dir = Right; col; v; sibling} -> mk col sibling v t in
     (* balancing here is crucial to preserve the rbtree invariants! *)
     balance t
 
@@ -274,10 +276,10 @@ module RBT : RBT  = struct
   let move_frame dir t = match t with
     | Empty -> None
     | Red (l, v, r) | Black (l, v, r) ->
-      let is_black = is_black t in
+      let col = color t in
       match dir with
-        | Left -> Some (l, {dir; is_black; v; sibling = r})
-        | Right -> Some (r, {dir; is_black; v; sibling = l})
+        | Left -> Some (l, {dir; col; v; sibling = r})
+        | Right -> Some (r, {dir; col; v; sibling = l})
 
   let move dir (t, zip) =
     match move_frame dir t with
