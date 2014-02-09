@@ -129,9 +129,7 @@ let rec codom : type a b. (a,b) negative -> b positive = function
 
 (** Some constructors for our GADT. *)
 
-let (@->) a b = Fun (Ty a,b)
-let returning t = Ret (Ty t)
-
+let (@->) a b = Fun (a,b)
 let (++) a b = Sum (a, b)
 let ( ** ) a b = Prod (a, b)
 
@@ -246,6 +244,13 @@ let ncheck n (s: Sig.t) =
     List.iter (fun (_id, Sig.Elem (fd, f)) -> use fd f) s;
   done
 
+(** Check a property over all the elements of datatype that were
+ * generated up to this point. This function returns [Some x] where [x] is an
+ * element that fails to satisfy the property, and [None] is no such element
+ * exists. *)
+let counter_example ty f =
+  try Some (produce ty |> List.find (fun e -> not (f e)))
+  with Not_found -> None
 
 (* -------------------------------------------------------------------------- *)
 
@@ -263,22 +268,21 @@ module SIList = struct
     | t::q -> if t < x then t :: add x q else x::t::q
 end
 
-(** The description of the type of sorted integer lists. Elements of this type
- * can be compared using the polymorphic, structural comparison operator (=). *)
-let si_t : SIList.t ty = Ty.declare ()
+(** The description of the type of sorted integer lists. *)
+let si_t = Ty (Ty.declare () : SIList.t ty)
 
 (** Conversely, [int] is a ground type that can not only be compared with (=),
  * but also admits a generator. *)
-let int_t : int ty = Ty.declare ~fresh:(fun _ -> Random.int 1000) ()
-
-(** Populate the descriptor of the built-in type [int]. *)
-let () =
-  populate 10 int_t
+let int_t =
+  let ty : int ty = Ty.declare ~fresh:(fun _ -> Random.int 1000) () in
+  (** Populate the descriptor. *)
+  populate 10 ty;
+  Ty ty
 
 (** Use module [Sig] to build a description of the signature of [SIList]. *)
 let silist_sig = Sig.([
-  val_ "empty" (returning si_t) SIList.empty;
-  val_ "add" (int_t @-> si_t @-> returning si_t) SIList.add;
+  val_ "empty" (Ret si_t) SIList.empty;
+  val_ "add" (int_t @-> si_t @-> Ret si_t) SIList.add;
 ])
 
 (** Generate instances of [SIList.t]. *)
@@ -288,9 +292,10 @@ let () =
 (** The property that we wish to test for is that the lists are well-sorted. We
  * define a predicate for that purpose and assert that no counter-example can be
  * found. *)
+let is_sorted s = (List.sort Pervasives.compare s = s)
+
 let () =
-  let prop s = List.sort Pervasives.compare s = s in
-  assert (Ty.counter_example si_t prop = None);
+  assert (counter_example si_t is_sorted = None);
   ()
 
 
@@ -445,38 +450,36 @@ module RBT : RBT  = struct
       | Some (t, frame) -> Some (t, frame::zip)
 end
 
-let rbt_t : int RBT.t ty = Ty.declare ()
-let int_t : int ty = Ty.declare ~fresh:(fun _ -> Random.int 10) ()
-let () = populate 5 int_t
+let rbt_t = Ty (Ty.declare () : int RBT.t ty)
 
 let rbt_sig = Sig.([
-  val_ "empty" (returning rbt_t) RBT.empty;
-  val_ "insert" (int_t @-> rbt_t @-> returning rbt_t) RBT.insert;
+  val_ "empty" (Ret rbt_t) RBT.empty;
+  val_ "insert" (int_t @-> rbt_t @-> Ret rbt_t) RBT.insert;
 ])
 
 let () = ncheck 5 rbt_sig
 
 let () =
-  let prop s = let s = RBT.elements s in List.sort Pervasives.compare s = s in
-  assert (Ty.counter_example rbt_t prop = None);
-  assert (Ty.counter_example rbt_t RBT.is_balanced = None);
+  let is_sorted s = is_sorted (RBT.elements s) in
+  assert (counter_example rbt_t is_sorted = None);
+  assert (counter_example rbt_t RBT.is_balanced = None);
   ()
 
-let dir_t : RBT.direction ty = Ty.declare ~initial:RBT.([Left; Right]) ()
-let rbtopt_t : int RBT.t option ty = Ty.declare ()
-let ptropt_t : int RBT.pointer option ty = Ty.declare ()
+let dir_t = Ty (Ty.declare ~initial:RBT.([Left; Right]) () : RBT.direction ty)
+let rbtopt_t = Ty (Ty.declare () : int RBT.t option ty)
+let ptropt_t = Ty (Ty.declare () : int RBT.pointer option ty)
 
 let zip_sig = RBT.(rbt_sig @ Sig.([
-  val_ "Some" (rbt_t @-> returning rbtopt_t)
+  val_ "Some" (rbt_t @-> Ret rbtopt_t)
     (fun z -> Some z);
-  val_ "some zip_open" (rbt_t @-> returning ptropt_t)
+  val_ "some zip_open" (rbt_t @-> Ret ptropt_t)
     (fun v -> Some (zip_open v));
-  val_ "some zip_close" (ptropt_t @-> returning rbtopt_t)
+  val_ "some zip_close" (ptropt_t @-> Ret rbtopt_t)
     (function None -> None | Some v -> Some (zip_close v));
 
-  val_ "move_up" (ptropt_t @-> returning ptropt_t)
+  val_ "move_up" (ptropt_t @-> Ret ptropt_t)
     (function None -> None | Some v -> move_up v);
-  val_ "move" (dir_t @-> ptropt_t @-> returning ptropt_t)
+  val_ "move" (dir_t @-> ptropt_t @-> Ret ptropt_t)
     (fun dir -> function None -> None | Some v -> move dir v);
 ]))
 
@@ -486,4 +489,4 @@ let () =
   let prop = function
     | None -> true
     | Some v -> RBT.is_balanced v in
-  assert (Ty.counter_example rbtopt_t prop = None)
+  assert (counter_example rbtopt_t prop = None)
