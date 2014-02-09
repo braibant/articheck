@@ -115,11 +115,10 @@ let (>>=) li f = List.flatten (List.map f li)
  * initial element [a], generate all possible [b]s. This is the core function of
  * this module. *)
 let rec eval : type a b. (a,b) fn -> a -> b list =
-  let open Ty in
   fun fd f ->
     match fd with
     | Constant _ -> [f]
-    | Fun (ty,fd) -> ty.enum >>= fun e -> eval fd (f e)
+    | Fun (ty,fd) -> ty.Ty.enum >>= fun e -> eval fd (f e)
 
 (** Recursively find the descriptor that corresponds to the codomain of a
  * function. *)
@@ -158,12 +157,11 @@ let use (fd: ('a, 'b) fn) (f: 'a) =
 (** This function populates an existing type descriptor who has a built-in
  * generator by calling repeatedly the said generator. *)
 let populate n ty =
-  let open Ty in
   match ty.fresh with
     | None -> invalid_arg "populate"
     | Some fresh ->
       for __ = 0 to n - 1 do
-        Ty.add (fresh ty.enum) ty
+        Ty.(add (fresh ty.enum) ty)
       done
 
 
