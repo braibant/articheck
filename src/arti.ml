@@ -130,8 +130,8 @@ let rec codom : type a b. (a,b) negative -> b positive = function
 (** Some constructors for our GADT. *)
 
 let (@->) a b = Fun (a,b)
-let (++) a b = Sum (a, b)
-let ( ** ) a b = Prod (a, b)
+let (+@) a b = Sum (a, b)
+let ( *@ ) a b = Prod (a, b)
 
 (** Auxiliary functions on lists *)
 let concat_map f li = List.flatten (List.map f li)
@@ -465,28 +465,37 @@ let () =
   assert (counter_example rbt_t RBT.is_balanced = None);
   ()
 
+(** For now we'll represent [foo option] as [(foo, unit) sum], and
+    manually insert back and forth conversions; medium-term, type
+    descriptions should have a constructor to hide type bijections. *)
+type 'a structural_option = ('a, unit) sum
+
+let of_option = function
+  | Some v -> L v
+  | None -> R ()
+let to_option = function
+  | L v -> Some v
+  | R () -> None
+
+let unit_t = Ty (Ty.declare ~initial:[()] () : unit ty)
 let dir_t = Ty (Ty.declare ~initial:RBT.([Left; Right]) () : RBT.direction ty)
-let rbtopt_t = Ty (Ty.declare () : int RBT.t option ty)
-let ptropt_t = Ty (Ty.declare () : int RBT.pointer option ty)
+let ptr_t = Ty (Ty.declare () : int RBT.pointer ty)
+
+let ptropt_t
+    : int RBT.pointer structural_option positive
+    = ptr_t +@ unit_t
 
 let zip_sig = RBT.(rbt_sig @ Sig.([
-  val_ "Some" (rbt_t @-> Ret rbtopt_t)
-    (fun z -> Some z);
-  val_ "some zip_open" (rbt_t @-> Ret ptropt_t)
-    (fun v -> Some (zip_open v));
-  val_ "some zip_close" (ptropt_t @-> Ret rbtopt_t)
-    (function None -> None | Some v -> Some (zip_close v));
+  val_ "zip_open" (rbt_t @-> Ret ptr_t) zip_open;
+  val_ "zip_close" (ptr_t @-> Ret rbt_t) zip_close;
 
-  val_ "move_up" (ptropt_t @-> Ret ptropt_t)
-    (function None -> None | Some v -> move_up v);
-  val_ "move" (dir_t @-> ptropt_t @-> Ret ptropt_t)
-    (fun dir -> function None -> None | Some v -> move dir v);
+  val_ "move_up" (ptr_t @-> Ret ptropt_t)
+    (fun ptr -> move_up ptr |> of_option);
+  val_ "move" (dir_t @-> ptr_t @-> Ret ptropt_t)
+    (fun dir ptr -> move dir ptr |> of_option);
 ]))
 
-let () = ncheck 1 zip_sig
+let () = ncheck 2 zip_sig
 
 let () =
-  let prop = function
-    | None -> true
-    | Some v -> RBT.is_balanced v in
-  assert (counter_example rbtopt_t prop = None)
+  assert (counter_example rbt_t RBT.is_balanced = None)
