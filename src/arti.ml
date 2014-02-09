@@ -1,4 +1,3 @@
-(* The type of our type descriptors. *)
 module Ty = struct
 
   (** Internally, a type descriptor of ['a] is an imperative data structure made
@@ -82,11 +81,19 @@ module Ty = struct
 
 end
 
+(** The type of our type descriptors. *)
 type 'a ty = 'a Ty.t
 
+(* The GADT [('b, 'a) fn] describes functions of type ['b] whose return type is
+ * ['a].
+ * - The base case is constant values: they have type ['a] and return ['a].
+ * - The other case is an arrow: from a function with ['b] that returns ['c], we
+ *   can construct a function of type ['a -> 'b] which still returns ['c].
+ * We attach to each branch a descriptor of the argument type ['a].
+ *)
 type (_,_) fn =
 | Constant : 'a ty -> ('a,'a) fn
-| Fun    : 'a ty * ('b, 'c) fn -> ('a -> 'b, 'c) fn;;
+| Fun      : 'a ty * ('b, 'c) fn -> ('a -> 'b, 'c) fn;;
 
 let (@->) ty fd = Fun (ty,fd)
 let returning ty = Constant ty
@@ -97,7 +104,7 @@ let rec eval : type a b. (a,b) fn -> a -> b list =
   let open Ty in
   fun fd f ->
     match fd with
-    | Constant ty -> [f]
+    | Constant _ -> [f]
     | Fun (ty,fd) -> ty.enum >>= fun e -> eval fd (f e)
 
 let rec codom : type a b. (a,b) fn -> b ty =
@@ -125,7 +132,7 @@ let populate n ty =
   match ty.fresh with
     | None -> invalid_arg "populate"
     | Some fresh ->
-      for i = 0 to n - 1 do
+      for __ = 0 to n - 1 do
         Ty.add (fresh ty.enum) ty
       done
 
@@ -139,7 +146,7 @@ module Sig = struct
 end
 
 let ncheck n (s: Sig.t) =
-  for i = 1 to n do
+  for __ = 1 to n do
     List.iter (fun (_id, Sig.Elem (fd, f)) -> use fd f) s;
   done
 
@@ -180,6 +187,8 @@ module type RBT = sig
   | Black of 'a t * 'a * 'a t
 
   val empty : 'a t
+  (* XXX this function was not exported before, meaning it was untested? *)
+  val mem : 'a -> 'a t -> bool
   val insert : 'a -> 'a t -> 'a t
   val elements : 'a t -> 'a list
   val is_balanced : 'a t -> bool
