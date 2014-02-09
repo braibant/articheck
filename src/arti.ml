@@ -1,4 +1,15 @@
+(* The type of our type descriptors. *)
 module Ty = struct
+
+  (** Internally, a type descriptor of ['a] is an imperative data structure made
+   * up of:
+   * - an equality function,
+   * - the list of ['a]s we have constructed so far,
+   * - a function that generates a new ['a] different from all the ['a]s we have
+   * constructed so far; this function is only available for ground types (e.g.
+   * int)
+   * - ??
+   * - a unique identifier. *)
   type 'a t = {
     eq: 'a -> 'a -> bool;
     mutable enum : 'a list;
@@ -7,19 +18,26 @@ module Ty = struct
     uid : int;
   }
 
-  let mem x s =
+  let mem (x: 'a) (s: 'a t): bool =
     List.exists (fun y -> y = x) s.enum
 
-  let add x s =
+  let add (x: 'a) (s: 'a t): unit =
     if mem x s then () else s.enum <- x::s.enum
 
-  let elements s = s.enum
+  let elements (s: 'a t): 'a list =
+    s.enum
 
-  let gensym =
+  let gensym: unit -> int =
     let r = ref (-1) in
     fun () -> incr r; !r
 
-  let declare eq = {
+  (* ------------------------------------------------------------------------ *)
+
+  (** Functions for creating new ['a t]s. *)
+
+  (** This function allows one to declare a new type descriptor, by providing its
+   * equality function. *)
+  let declare (eq: 'a -> 'a -> bool): 'a t = {
     eq;
     enum = [];
     fresh = None;
@@ -27,18 +45,26 @@ module Ty = struct
     uid = gensym ()
   }
 
-  let finite eq enum =
+  (** This function allows one to create a new type descriptor, by giving an
+   * equality function along with an initial set of values. *)
+  let finite (eq: 'a -> 'a -> bool) (enum: 'a list): 'a t =
     { (declare eq) with enum }
 
-  (* generate a fresh type descriptor *)
-  (* maybe we could remember what is the base type, so that if we run
-     out of elements for the new type, we could generate new instances of
-     the old one, and select the one that fulfill the invariant. *)
+  (** This function generates a new type descriptor along with an [invar].
+   *
+   * XXX: what is [invar]? this function is not used anywhere else in the code,
+   * so it's hard to guess its purpose. Some original comments follow.
+   *
+   * generate a fresh type descriptor
+   * maybe we could remember what is the base type, so that if we run
+   * out of elements for the new type, we could generate new instances of
+   * the old one, and select the one that fulfill the invariant. *)
   let (/) ty invar =
     let invar x = invar x && ty.invar x in
     {ty with uid = gensym (); invar}
 
-  (* tag a type with a generator, without generating a fresh type descriptor *)
+  (** Attach a generator of elements of type ['a] to an already existing ['a t].
+   * Please note that the ['a t] must not possess a generator already. *)
   let (&) ty fresh =
     match ty.fresh with
       | None ->
@@ -46,11 +72,14 @@ module Ty = struct
       | Some _ ->
 	invalid_arg "fresh"
 
-  (** Check a property overall the elements of ['a ty] that were
-      generated up to this point *)
+  (** Check a property over all the elements of ['a ty] that were
+   * generated up to this point. This function returns [Some x] where [x] is an
+   * element that fails to satisfy the property, and [None] is no such element
+   * exists. *)
   let counter_example ty f =
     try Some (List.find (fun e -> not (f e)) ty.enum)
     with Not_found -> None
+
 end
 
 type 'a ty = 'a Ty.t
