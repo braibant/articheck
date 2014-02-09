@@ -265,6 +265,8 @@ module RBT : RBT  = struct
       let rec check_black_height t = match t with
         | Empty -> 0
         | Red (l, _, r) | Black (l, _, r) ->
+          if color t = R && (color l, color r) <> (B, B) then
+            raise Exit;
           let bhl = check_black_height l in
           let bhr = check_black_height r in
           if bhl <> bhr then raise Exit;
