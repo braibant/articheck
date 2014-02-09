@@ -8,3 +8,7 @@ clean:
 
 test: arti
 	./arti
+
+doc: arti
+	mkdir -p ../doc/
+	ocamldoc -d ../doc/ -html *.ml

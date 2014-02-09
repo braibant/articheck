@@ -1,3 +1,7 @@
+(** This module provides the companion implementation to our functional pearl. *)
+
+(** {2 The core module of our type descriptors } *)
+
 module Ty = struct
 
   (** Internally, a type descriptor of ['a] is an imperative data structure made
@@ -81,25 +85,35 @@ module Ty = struct
 
 end
 
+(* -------------------------------------------------------------------------- *)
+
+(** {2 Main routines for dealing with our GADT } *)
+
 (** The type of our type descriptors. *)
 type 'a ty = 'a Ty.t
 
-(* The GADT [('b, 'a) fn] describes functions of type ['b] whose return type is
+(** The GADT [('b, 'a) fn] describes functions of type ['b] whose return type is
  * ['a].
  * - The base case is constant values: they have type ['a] and return ['a].
- * - The other case is an arrow: from a function with ['b] that returns ['c], we
- *   can construct a function of type ['a -> 'b] which still returns ['c].
+ * - The other case is an arrow: from a function with type ['b] that returns
+ *   ['c], we can construct a function of type ['a -> 'b] which still returns
+ *   ['c].
  * We attach to each branch a descriptor of the argument type ['a].
  *)
 type (_,_) fn =
 | Constant : 'a ty -> ('a,'a) fn
 | Fun      : 'a ty * ('b, 'c) fn -> ('a -> 'b, 'c) fn;;
 
+(** Some constructors for our GADT. *)
+
 let (@->) ty fd = Fun (ty,fd)
 let returning ty = Constant ty
 
 let (>>=) li f = List.flatten (List.map f li)
 
+(** Given an description of functions of type [a] which return [b], and given an
+ * initial element [a], generate all possible [b]s. This is the core function of
+ * this module. *)
 let rec eval : type a b. (a,b) fn -> a -> b list =
   let open Ty in
   fun fd f ->
@@ -107,18 +121,32 @@ let rec eval : type a b. (a,b) fn -> a -> b list =
     | Constant _ -> [f]
     | Fun (ty,fd) -> ty.enum >>= fun e -> eval fd (f e)
 
+(** Recursively find the descriptor that corresponds to the codomain of a
+ * function. *)
 let rec codom : type a b. (a,b) fn -> b ty =
   function
     | Fun (_,fd) -> codom fd
     | Constant ty -> ty
 
-let blows_after_n exn n =
+
+(* -------------------------------------------------------------------------- *)
+
+(** {2 Populating our type descriptors } *)
+
+(** Helper function that returns a function [tick]. Calling [tick] more than [n]
+ * times will raise [exn]. *)
+let blows_after_n (exn: exn) (n: int): unit -> unit =
   let count = ref 0 in
   fun () ->
     incr count;
     if !count > n then raise exn
 
-let use fd f =
+(** Slightly higher-level function. This one takes a descriptor of a function of
+ * type ['a] that produce ['b], as well as a function [f] with the right type.
+ * It [eval]s [fd] so as to generate a list of ['b]s, finds the descriptor of
+ * type ['b], and then mutates it to stores all the elements we have constructed
+ * (within a reasonable number, of course). *)
+let use (fd: ('a, 'b) fn) (f: 'a) =
   let prod = eval fd f in
   let ty = codom fd in
   let tick = blows_after_n Exit 1000 in
@@ -127,6 +155,8 @@ let use fd f =
   try List.iter (fun x -> tick (); Ty.add x ty) prod;
   with Exit -> ()
 
+(** This function populates an existing type descriptor who has a built-in
+ * generator by calling repeatedly the said generator. *)
 let populate n ty =
   let open Ty in
   match ty.fresh with
@@ -136,21 +166,42 @@ let populate n ty =
         Ty.add (fresh ty.enum) ty
       done
 
+
+(* -------------------------------------------------------------------------- *)
+
+(** {2 Describing signatures of modules that we wish to test } *)
+
 module Sig = struct
+  (** An element from a module signature is a function of type ['a], along with
+   * its descriptor. *)
   type elem = Elem : ('a,'b) fn * 'a -> elem
 
+  (** Elements have a name. *)
   type ident = string
+
+  (** Finally, a signature item is the name of the element along with the
+   * description of the element itself. *)
   type t = (ident * elem) list
 
+  (** A helper for constructor a signature item. *)
   let val_ id fd f = (id, Elem (fd, f))
 end
 
+(** This is the function that you want to use: take the description of a module
+ * signature, then iterate [n] times to generate elements for all the types in
+ * the module. *)
 let ncheck n (s: Sig.t) =
   for __ = 1 to n do
     List.iter (fun (_id, Sig.Elem (fd, f)) -> use fd f) s;
   done
 
-(* Example: Sorted integer lists *)
+
+(* -------------------------------------------------------------------------- *)
+
+(** {2 Examples } *)
+
+(** {3 Sorted integer lists } *)
+
 module SIList = struct
   type t = int list
 
@@ -161,22 +212,38 @@ module SIList = struct
     | t::q -> if t < x then t :: add x q else x::t::q
 end
 
+(** The description of the type of sorted integer lists. Elements of this type
+ * can be compared using the polymorphic, structural comparison operator (=). *)
 let si_t : SIList.t ty = Ty.(declare (=))
-let int_t : int ty = Ty.(declare (=) & (fun _ -> Random.int 1000))
-let () = populate 10 int_t
 
+(** Conversely, [int] is a ground type that can not only be compared with (=),
+ * but also admits a generator. *)
+let int_t : int ty = Ty.(declare (=) & (fun _ -> Random.int 1000))
+
+(** Populate the descriptor of the built-in type [int]. *)
+let () =
+  populate 10 int_t
+
+(** Use module [Sig] to build a description of the signature of [SIList]. *)
 let silist_sig = Sig.([
   val_ "empty" (returning si_t) SIList.empty;
   val_ "add" (int_t @-> si_t @-> returning si_t) SIList.add;
 ])
 
-let () =  ncheck 5 silist_sig
+(** Generate instances of [SIList.t]. *)
+let () =
+  ncheck 5 silist_sig
 
+(** The property that we wish to test for is that the lists are well-sorted. We
+ * define a predicate for that purpose and assert that no counter-example can be
+ * found. *)
 let () =
   let prop s = List.sort Pervasives.compare s = s in
   assert (Ty.counter_example si_t prop = None);
   ()
 
+
+(** {3 Red-black trees } *)
 
 module type RBT = sig
   (* private types to enforce abstraction
