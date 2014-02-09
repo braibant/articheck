@@ -263,7 +263,7 @@ module type RBT = sig
   (* public type, part of the user interface for the 'move' function *)
   type direction = Left | Right
   type 'a zipper
-  type 'a pointer = 'a t * 'a zipper
+  type 'a pointer
 
   val zip_open : 'a t -> 'a pointer
   val zip_close : 'a pointer -> 'a t
@@ -427,14 +427,6 @@ let zip_sig = RBT.(rbt_sig @ Sig.([
     (function None -> None | Some v -> move_up v);
   val_ "move" (dir_t @-> ptropt_t @-> returning ptropt_t)
     (fun dir -> function None -> None | Some v -> move dir v);
-
-  val_ "read" (ptropt_t @-> returning rbtopt_t)
-    (function None -> None | Some (t, _zip) -> Some t);
-
-  val_ "write" (ptropt_t @-> rbtopt_t @-> returning ptropt_t)
-    (fun ptr t -> match ptr, t with
-      | None, _ | _, None -> None
-      | Some (_, zip), Some t -> Some (t, zip));
 ]))
 
 let () = ncheck 1 zip_sig
