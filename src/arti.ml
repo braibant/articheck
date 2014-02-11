@@ -2,67 +2,88 @@
 
 (** {2 The core module of our type descriptors } *)
 
+module type HMAP = sig
+
+  type t
+  type 'a key
+  val mem : 'a key -> t -> bool
+  val add : 'a key -> 'a  -> t -> t
+  val find: 'a key -> t -> 'a
+  val empty : t
+
+end
+
+
+
+
+
 module Ty = struct
 
-  (** Internally, a type descriptor of ['a] is an imperative data structure made
-   * up of:
-   * - an equality function,
-   * - the list of ['a]s we have constructed so far,
-   * - a function that generates a new ['a] different from all the ['a]s we have
-   * constructed so far; this function is only available for ground types (e.g.
-   * int)
-   * - ??
-   * - a unique identifier. *)
-  type 'a t = {
-    eq: 'a -> 'a -> bool;
-    mutable enum : 'a list;
-    fresh : ('a list -> 'a) option;
-    invar : 'a -> bool;
-    uid : int;
-  }
+  (** Internally, a type descriptor is made up of:
+  - an equality test
+  - a unique identifier
+  *)
+  type 'a descr =
+    {
+      eq: 'a -> 'a -> bool;
+      uid: int;
+      fresh: ('a list -> 'a) option;
+      size: int
+    }
 
-  let mem (x: 'a) (s: 'a t): bool =
-    List.exists (fun y -> y = x) s.enum
+  (** A set of elements of type ['a]*)
+  type 'a enum = 'a list
 
-  let add (x: 'a) (s: 'a t): unit =
-    if mem x s then () else s.enum <- x::s.enum
-
-  let elements (s: 'a t): 'a list =
-    s.enum
+  type 'a t =
+    {descr: 'a descr;
+     enum: 'a enum}
 
   let gensym: unit -> int =
     let r = ref (-1) in
     fun () -> incr r; !r
+
+  let mem (x: 'a) (s: 'a t): bool =
+    List.exists (fun y -> y = x) s.enum
+
+  let add (x: 'a) (s: 'a t): 'a t =
+    if mem x s then s else {s with enum = x::s.enum}
+
+  let elements (s: 'a t): 'a list =
+    s.enum
+
+  let descr ty = ty.descr
+  let enum ty = ty.enum
+
+  (** This function populates an existing type descriptor who has a
+      built-in generator by calling repeatedly the said generator. *)
+  let populate n ty =
+    match ty.descr.fresh with
+    | None -> invalid_arg "populate"
+    | Some fresh ->
+      for __ = 0 to n - 1 do
+        (add (fresh ty.enum) ty)
+      done
+
 
   (* ------------------------------------------------------------------------ *)
 
   (** Functions for creating new ['a t]s. *)
 
   (** This function allows one to declare a new type descriptor. All the
-   * arguments are filled with sensible defaults. *)
+      * arguments are filled with sensible defaults. *)
   let declare
-    ?(eq=(=))
-    ?(initial=[])
-    ?fresh
-    ?(invar = (fun _ -> true)) ()
-  : 'a t = {
-    eq;
-    enum = initial;
-    fresh;
-    invar;
-    uid = gensym ()
-  }
-
-  (* XXX: what is [invar]? this function is not used anywhere else in the code,
-   * so it's hard to guess its purpose. Some original comments follow.
-   *
-   * generate a fresh type descriptor
-   * maybe we could remember what is the base type, so that if we run
-   * out of elements for the new type, we could generate new instances of
-   * the old one, and select the one that fulfill the invariant.
-  let (/) ty invar =
-    let invar x = invar x && ty.invar x in
-    {ty with uid = gensym (); invar} *)
+      ?(eq=(=))
+      ?(initial=[])
+      ?fresh
+      ()
+      : 'a t =
+    {descr =
+	{
+	  eq;
+	  uid = gensym ();
+	  fresh;
+	  size = 1000};
+     enum = initial}
 
   (** Check a property over all the elements of ['a ty] that were
    * generated up to this point. This function returns [Some x] where [x] is an
@@ -72,6 +93,33 @@ module Ty = struct
     try Some (List.find (fun e -> not (f e)) ty.enum)
     with Not_found -> None
 
+  (* ------------------------------------------------------------------------ *)
+
+  module T = struct
+    type t = Dyn: 'a descr -> t
+
+    let uid = function Dyn d -> d.uid
+    let hash = uid
+    let equal t1 t2 = uid t1 = uid t2
+    let compare t1 t2 = Pervasives.compare (uid t1) (uid t2)
+  end
+
+  module IM = struct
+
+    include Hashtbl.Make(T)
+    let create () = create 1337
+    let add k v ht = add ht k v
+    let find k ht = find ht k
+  end
+
+  module TP = struct
+
+    type property = Dyn: 'a enum -> property
+    let bottom = Dyn []
+    let equal = (=)
+    let is_maximal (_: property)= false
+  end
+
 end
 
 (* -------------------------------------------------------------------------- *)
@@ -79,7 +127,7 @@ end
 (** {2 Main routines for dealing with our GADT } *)
 
 (** The type of our type descriptors. *)
-type 'a ty = 'a Ty.t
+type 'a ty = 'a Ty.descr
 
 (** The GADT [('b, 'a) fn] describes functions of type ['b] whose return type is
  * ['a].
@@ -99,15 +147,6 @@ let (@->) ty fd = Fun (ty,fd)
 let returning ty = Constant ty
 
 let (>>=) li f = List.flatten (List.map f li)
-
-(** Given an description of functions of type [a] which return [b], and given an
- * initial element [a], generate all possible [b]s. This is the core function of
- * this module. *)
-let rec eval : type a b. (a,b) fn -> a -> b list =
-  fun fd f ->
-    match fd with
-    | Constant _ -> [f]
-    | Fun (ty,fd) -> ty.Ty.enum >>= fun e -> eval fd (f e)
 
 (** Recursively find the descriptor that corresponds to the codomain of a
  * function. *)
@@ -134,24 +173,15 @@ let blows_after_n (exn: exn) (n: int): unit -> unit =
  * It [eval]s [fd] so as to generate a list of ['b]s, finds the descriptor of
  * type ['b], and then mutates it to stores all the elements we have constructed
  * (within a reasonable number, of course). *)
-let use (fd: ('a, 'b) fn) (f: 'a) =
-  let prod = eval fd f in
-  let ty = codom fd in
-  let tick = blows_after_n Exit 1000 in
-  (* [Gabriel] I had to use this for ncheck to terminate in finite
-     time on large signatures *)
-  try List.iter (fun x -> tick (); Ty.add x ty) prod;
-  with Exit -> ()
+(* let use (fd: ('a, 'b) fn) (f: 'a) = *)
+(*   let prod = eval fd f in *)
+(*   let ty = codom fd in *)
+(*   let tick = blows_after_n Exit 1000 in *)
+(*   (\* [Gabriel] I had to use this for ncheck to terminate in finite *)
+(*      time on large signatures *\) *)
+(*   try List.iter (fun x -> tick (); Ty.add x ty) prod; *)
+(*   with Exit -> () *)
 
-(** This function populates an existing type descriptor who has a built-in
- * generator by calling repeatedly the said generator. *)
-let populate n ty =
-  match ty.Ty.fresh with
-    | None -> invalid_arg "populate"
-    | Some fresh ->
-      for __ = 0 to n - 1 do
-        Ty.(add (fresh ty.enum) ty)
-      done
 
 
 (* -------------------------------------------------------------------------- *)
@@ -174,13 +204,114 @@ module Sig = struct
   let val_ id fd f = (id, Elem (fd, f))
 end
 
+
+(* -------------------------------------------------------------------------- *)
+
+(** {2 Populating the types of the module} *)
+
+module Fun = struct
+
+
+  module Env = struct
+    open Ty
+
+    type 'a key = 'a Ty.descr
+    type 'a elt = 'a Ty.enum
+
+    type binding = Bind : 'a key * 'a elt -> binding
+
+    type t = binding list
+
+    let rec mem x = function
+      | [] -> false
+      | Bind (k,v):: tl ->  x.uid = k.uid || mem x tl
+
+    let rec add x v = function
+      | [] -> [Bind (x,v)]
+      | Bind (k,_) as hd :: tl -> if x.uid = k .uid then Bind (x,v):: tl else hd :: add x v tl
+
+    let rec find x = function
+      | [] -> raise Not_found
+      | Bind (k,v):: tl -> if x.uid = k .uid then Obj.magic v else find x tl
+
+    let empty : binding list = []
+
+  end
+
+  (** Given an description of functions of type [a] which return [b], and given an
+    * initial element [a], generate all possible [b]s. This is the core function of
+      * this module. *)
+
+  let eval (env: 'a Ty.descr -> 'a Ty.enum  ) =
+    let rec eval : type a b.  (a,b) fn -> a -> b list =
+		     fun  fd f ->
+		       match fd with
+		       | Constant _ -> [f]
+		       | Fun (ty,fd) -> (env ty) >>= fun e -> eval  fd (f e)
+    in
+    eval
+
+
+  module Span = struct
+    open Ty
+
+    type 'a key = 'a Ty.descr
+    type 'a elt =
+      Elem : ('a,'b) fn * 'a -> 'b elt
+
+    type binding = Bind : 'a key * 'a elt list -> binding
+
+    type t = binding list
+
+    let rec mem x = function
+      | [] -> false
+      | Bind (k,v):: tl ->  x.uid = k.uid || mem x tl
+
+    let rec add x v = function
+      | [] -> [Bind (x,[v])]
+      | Bind (k,l) as hd :: tl -> if x.uid = k.uid then Bind (k,Obj.magic v::l):: tl else hd :: add x v tl
+
+    let rec find x = function
+      | [] -> raise Not_found
+      | Bind (k,v):: tl -> if x.uid = k .uid then Obj.magic v else find x tl
+
+    let empty : binding list = []
+
+  end
+
+
+
+  module F = Fix.Make(Ty.IM)(Ty.TP)
+
+  let fcheck s =
+    let span =
+      List.fold_left (fun acc (_,e) ->
+	match e with
+	| Sig.Elem (fd,f) -> Span.add (codom fd) (Elem (fd,f)) acc
+      ) Span.empty s in
+    let eqs =
+      fun ty valuation ->
+	let elts = Span.find ty span in
+	let old = valuation ty in
+	List.fold_left (fun acc elt ->
+	  match elt with
+	  | Span.Elem (fd,f) -> (eval valuation fd f) @ acc
+	) old elts
+    in
+    F.lfp eqs
+end
 (** This is the function that you want to use: take the description of a module
  * signature, then iterate [n] times to generate elements for all the types in
  * the module. *)
-let ncheck n (s: Sig.t) =
-  for __ = 1 to n do
-    List.iter (fun (_id, Sig.Elem (fd, f)) -> use fd f) s;
-  done
+(* let ncheck n (s: Sig.t) = *)
+(*   for __ = 1 to n do *)
+(*     List.iter (fun (_id, Sig.Elem (fd, f)) -> use fd f) s; *)
+(*   done *)
+
+
+
+
+
 
 
 (* -------------------------------------------------------------------------- *)
@@ -209,7 +340,7 @@ let int_t : int ty = Ty.declare ~fresh:(fun _ -> Random.int 1000) ()
 
 (** Populate the descriptor of the built-in type [int]. *)
 let () =
-  populate 10 int_t
+  Ty.populate 10 int_t
 
 (** Use module [Sig] to build a description of the signature of [SIList]. *)
 let silist_sig = Sig.([
@@ -383,7 +514,7 @@ end
 
 let rbt_t : int RBT.t ty = Ty.declare ()
 let int_t : int ty = Ty.declare ~fresh:(fun _ -> Random.int 10) ()
-let () = populate 5 int_t
+let () = Ty.populate 5 int_t
 
 let rbt_sig = Sig.([
   val_ "empty" (returning rbt_t) RBT.empty;
