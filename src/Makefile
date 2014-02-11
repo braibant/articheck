@@ -1,7 +1,7 @@
 all: arti
 
 arti: arti.ml
-	ocamlfind ocamlopt -package fix -g -annot -bin-annot -w @1..3@8..12@14..21@23..40-41@43 $< -o $@
+	ocamlfind ocamlopt -g -annot -bin-annot -w @1..3@8..12@14..21@23..40-41@43 $< -o $@
 
 clean:
 	rm -f *.cm* arti *.o *.annot

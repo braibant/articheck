@@ -1,69 +1,131 @@
 (** This module provides the companion implementation to our functional pearl. *)
 
-(** {2 The core module of our type descriptors } *)
 
-module type HMAP = sig
+(** {2 Polymorphic sets, implemented as RBT}  *)
+module PSet = struct
 
-  type t
-  type 'a key
-  val mem : 'a key -> t -> bool
-  val add : 'a key -> 'a  -> t -> t
-  val find: 'a key -> t -> 'a
-  val empty : t
 
+  (* This code is different from the other implementation of RBT below, by intension*)
+  module RBT = struct
+    type 'a t =
+    | Empty
+    | Red of 'a t * 'a * 'a t
+    | Black of 'a t * 'a * 'a t
+
+    let empty = Empty
+
+    let rec mem compare x = function
+      | Empty -> false
+      | Red (l,v,r) | Black (l,v,r) ->
+	begin
+	  match compare x v with
+	  | -1 -> mem compare x l
+	  | 0 -> true
+	  | _ -> mem compare x r
+	end
+
+    type color = R | B
+
+    let color = function
+      | Red _ -> R
+      | Empty | Black _ -> B
+
+    let mk col l v r = match col with
+      | B -> Black (l, v, r)
+      | R -> Red (l, v, r)
+
+    let blacken = function
+      | Red (l,v,r) -> Black (l,v,r)
+      | (Empty | Black _) as n -> n
+
+    let balance = function
+      | Black ((Red (Red (a, x, b), y, c)
+		   | Red (a, x, Red (b, y, c))), z, d)
+      | Black (a, x, (Red (Red (b, y, c), z, d)
+			 | Red (b, y, Red (c, z, d))))
+	-> Red (Black (a, x, b), y, Black (c, z, d))
+      | n -> n
+
+    let insert compare x n =
+      let rec insert x t = match t with
+	| Empty -> Red (Empty, x, Empty)
+	| Red (l,v,r) ->
+	  begin match compare x v with
+	  | -1 -> Red (insert x l,v,r)
+	  | 0 -> Red (l,v,r)
+	  | _ -> Red (l,v,insert x r)
+	  end
+	| Black (l,v,r) ->
+	  begin match compare x v with
+	  | -1 -> balance (Black (insert x l,v,r))
+	  | 0 -> Black (l,v,r)
+	  | _ -> balance (Black (l,v,insert x r))
+	  end
+      in blacken (insert x n)
+
+    let rec elements = function
+      | Empty -> []
+      | Red (l,v,r) | Black (l, v, r) ->
+	elements l @ (v::elements r)
+
+    let rec cardinal = function
+      | Empty -> 0
+      | Red (l,_,r) | Black (l,_,r) -> cardinal l + cardinal r + 1
+  end
+
+  (** {2 Wrapping the set with the associated comparison function.}  *)
+  type 'a t =
+    {
+      set: 'a RBT.t;
+      compare: 'a -> 'a -> int;
+    }
+
+  let create compare = {set= RBT.Empty; compare}
+  let insert x s = {s with set = RBT.insert s.compare x s.set}
+  let mem x s = RBT.mem s.compare x s.set
+  let cardinal s = RBT.cardinal s.set
+  let elements s = RBT.elements s.set
 end
 
-
-
-
-
+(** {2 The core module of our type descriptors } *)
 module Ty = struct
 
   (** Internally, a type descriptor is made up of:
-  - an equality test
-  - a unique identifier
+      - a unique identifier
+      - a size annotation: the maximum number of elements of this type that we are going to build;
+      - an enumeration of the inhabitants of the type
+      - a function that generates a new ['a] different from all the
+      ['a]s we have constructed so far; this function is only available
+      for ground types (e.g.  int)
   *)
-  type 'a descr =
+  type 'a t =
     {
-      eq: 'a -> 'a -> bool;
       uid: int;
-      fresh: ('a list -> 'a) option;
-      size: int
+      size: int;
+      mutable enum: 'a PSet.t;
+      fresh: ('a PSet.t -> 'a) option;
     }
 
-  (** A set of elements of type ['a]*)
-  type 'a enum = 'a list
-
-  type 'a t =
-    {descr: 'a descr;
-     enum: 'a enum}
 
   let gensym: unit -> int =
     let r = ref (-1) in
     fun () -> incr r; !r
 
   let mem (x: 'a) (s: 'a t): bool =
-    List.exists (fun y -> y = x) s.enum
+    PSet.mem x s.enum
 
-  let add (x: 'a) (s: 'a t): 'a t =
-    if mem x s then s else {s with enum = x::s.enum}
+  let full s = s.size <= PSet.cardinal s.enum
+
+  let add (x: 'a) (s: 'a t): unit =
+    s.enum <- PSet.insert x s.enum
 
   let elements (s: 'a t): 'a list =
-    s.enum
+    PSet.elements s.enum
 
-  let descr ty = ty.descr
-  let enum ty = ty.enum
-
-  (** This function populates an existing type descriptor who has a
-      built-in generator by calling repeatedly the said generator. *)
-  let populate n ty =
-    match ty.descr.fresh with
-    | None -> invalid_arg "populate"
-    | Some fresh ->
-      for __ = 0 to n - 1 do
-        (add (fresh ty.enum) ty)
-      done
-
+  let merge (s: 'a t) (l: 'a list) =
+    let n = PSet.cardinal s.enum in
+    s.enum <- List.fold_left (fun acc x -> PSet.insert x acc) s.enum l;
+    n < PSet.cardinal s.enum
 
   (* ------------------------------------------------------------------------ *)
 
@@ -72,53 +134,36 @@ module Ty = struct
   (** This function allows one to declare a new type descriptor. All the
       * arguments are filled with sensible defaults. *)
   let declare
-      ?(eq=(=))
+      ?(cmp=(Pervasives.compare))
       ?(initial=[])
       ?fresh
       ()
       : 'a t =
-    {descr =
-	{
-	  eq;
-	  uid = gensym ();
-	  fresh;
-	  size = 1000};
-     enum = initial}
+    {
+      enum = List.fold_left (fun acc x -> PSet.insert x acc) (PSet.create cmp) initial;
+      uid = gensym ();
+      size = 50;
+      fresh;
+    }
+
+  (** This function populates an existing type descriptor who has a
+      built-in generator by calling repeatedly the said generator. *)
+  let populate n ty =
+    match ty.fresh with
+    | None -> invalid_arg "populate"
+    | Some fresh ->
+      for __ = 0 to n - 1 do
+        (add (fresh ty.enum) ty)
+      done
 
   (** Check a property over all the elements of ['a ty] that were
    * generated up to this point. This function returns [Some x] where [x] is an
    * element that fails to satisfy the property, and [None] is no such element
    * exists. *)
   let counter_example ty f =
-    try Some (List.find (fun e -> not (f e)) ty.enum)
+    try Some (List.find (fun e -> not (f e)) (PSet.elements ty.enum))
     with Not_found -> None
 
-  (* ------------------------------------------------------------------------ *)
-
-  module T = struct
-    type t = Dyn: 'a descr -> t
-
-    let uid = function Dyn d -> d.uid
-    let hash = uid
-    let equal t1 t2 = uid t1 = uid t2
-    let compare t1 t2 = Pervasives.compare (uid t1) (uid t2)
-  end
-
-  module IM = struct
-
-    include Hashtbl.Make(T)
-    let create () = create 1337
-    let add k v ht = add ht k v
-    let find k ht = find ht k
-  end
-
-  module TP = struct
-
-    type property = Dyn: 'a enum -> property
-    let bottom = Dyn []
-    let equal = (=)
-    let is_maximal (_: property)= false
-  end
 
 end
 
@@ -127,7 +172,7 @@ end
 (** {2 Main routines for dealing with our GADT } *)
 
 (** The type of our type descriptors. *)
-type 'a ty = 'a Ty.descr
+type 'a ty = 'a Ty.t
 
 (** The GADT [('b, 'a) fn] describes functions of type ['b] whose return type is
  * ['a].
@@ -156,33 +201,6 @@ let rec codom : type a b. (a,b) fn -> b ty =
     | Constant ty -> ty
 
 
-(* -------------------------------------------------------------------------- *)
-
-(** {2 Populating our type descriptors } *)
-
-(** Helper function that returns a function [tick]. Calling [tick] more than [n]
- * times will raise [exn]. *)
-let blows_after_n (exn: exn) (n: int): unit -> unit =
-  let count = ref 0 in
-  fun () ->
-    incr count;
-    if !count > n then raise exn
-
-(** Slightly higher-level function. This one takes a descriptor of a function of
- * type ['a] that produce ['b], as well as a function [f] with the right type.
- * It [eval]s [fd] so as to generate a list of ['b]s, finds the descriptor of
- * type ['b], and then mutates it to stores all the elements we have constructed
- * (within a reasonable number, of course). *)
-(* let use (fd: ('a, 'b) fn) (f: 'a) = *)
-(*   let prod = eval fd f in *)
-(*   let ty = codom fd in *)
-(*   let tick = blows_after_n Exit 1000 in *)
-(*   (\* [Gabriel] I had to use this for ncheck to terminate in finite *)
-(*      time on large signatures *\) *)
-(*   try List.iter (fun x -> tick (); Ty.add x ty) prod; *)
-(*   with Exit -> () *)
-
-
 
 (* -------------------------------------------------------------------------- *)
 
@@ -202,6 +220,7 @@ module Sig = struct
 
   (** A helper for constructor a signature item. *)
   let val_ id fd f = (id, Elem (fd, f))
+
 end
 
 
@@ -212,107 +231,162 @@ end
 module Fun = struct
 
 
-  module Env = struct
-    open Ty
 
-    type 'a key = 'a Ty.descr
-    type 'a elt = 'a Ty.enum
+  type descr = Descr : 'a Ty.t -> descr
 
-    type binding = Bind : 'a key * 'a elt -> binding
+  module Graph = struct
+    type node =
+      {descr: descr;
+       mutable incoming: edge list;
+       mutable outgoing: edge list;
+       mutable constructors: Sig.t;
+       mutable mark: bool
+      }
+    and edge =
+      {node1: node;
+       node2: node;
+       mutable destroyed: bool}
 
-    type t = binding list
+    module T (X: sig type 'a value end) = struct
+      open Ty
+      module HT = struct
+	include X
+	type t = Bind: 'a Ty.t * ('a value) option -> t
+	let uid = function Bind (ty,_) -> ty.uid
+	let equal t1 t2 = uid t1 = uid t2
+	let hash = uid
+      end
+      module WHT = Weak.Make(HT)
 
-    let rec mem x = function
-      | [] -> false
-      | Bind (k,v):: tl ->  x.uid = k.uid || mem x tl
+      open HT
+      let add t k v =
+	WHT.merge t (Bind (k,Some v))
 
-    let rec add x v = function
-      | [] -> [Bind (x,v)]
-      | Bind (k,_) as hd :: tl -> if x.uid = k .uid then Bind (x,v):: tl else hd :: add x v tl
+      let find t k =
+	match WHT.find t (Bind (k,None)) with
+	| Bind (_,None) -> raise Not_found
+	| Bind (_,Some v) -> Obj.magic v
 
-    let rec find x = function
-      | [] -> raise Not_found
-      | Bind (k,v):: tl -> if x.uid = k .uid then Obj.magic v else find x tl
-
-    let empty : binding list = []
-
-  end
-
-  (** Given an description of functions of type [a] which return [b], and given an
-    * initial element [a], generate all possible [b]s. This is the core function of
-      * this module. *)
-
-  let eval (env: 'a Ty.descr -> 'a Ty.enum  ) =
-    let rec eval : type a b.  (a,b) fn -> a -> b list =
-		     fun  fd f ->
-		       match fd with
-		       | Constant _ -> [f]
-		       | Fun (ty,fd) -> (env ty) >>= fun e -> eval  fd (f e)
-    in
-    eval
-
-
-  module Span = struct
-    open Ty
-
-    type 'a key = 'a Ty.descr
-    type 'a elt =
-      Elem : ('a,'b) fn * 'a -> 'b elt
-
-    type binding = Bind : 'a key * 'a elt list -> binding
-
-    type t = binding list
-
-    let rec mem x = function
-      | [] -> false
-      | Bind (k,v):: tl ->  x.uid = k.uid || mem x tl
-
-    let rec add x v = function
-      | [] -> [Bind (x,[v])]
-      | Bind (k,l) as hd :: tl -> if x.uid = k.uid then Bind (k,Obj.magic v::l):: tl else hd :: add x v tl
-
-    let rec find x = function
-      | [] -> raise Not_found
-      | Bind (k,v):: tl -> if x.uid = k .uid then Obj.magic v else find x tl
-
-    let empty : binding list = []
+      let create () = WHT.create 1337
 
   end
+    module N = T(struct type 'a value = node end)
+
+    let create ty =
+      {
+	descr = Descr ty;
+	incoming = [];
+	outgoing = [];
+	constructors = [];
+	mark = true
+      }
+
+    let link (n1: node) (n2: node) =
+      let e = {node1 = n1; node2 = n2; destroyed = false} in
+      n1.outgoing <- e::n1.outgoing;
+      n2.outgoing <- e::n2.outgoing
+
+    let follow src edge =
+      if edge.node1 == src then
+	edge.node2
+      else begin
+	assert (edge.node2 == src);
+	edge.node1
+      end
+
+    let successors node =
+      let successors = List.filter (fun edge -> not edge.destroyed) node.outgoing in
+      node.outgoing <- successors;
+      List.map (follow node) successors
+
+    (* smart constructor *)
+
+
+    let nodes = N.create ()
+    let node:
+    type t. t Ty.t -> node =
+      fun ty ->
+	try N.find nodes ty
+	with Not_found ->
+	  let node = create  ty in
+	  ignore (N.add nodes ty node);
+	  node
 
 
 
-  module F = Fix.Make(Ty.IM)(Ty.TP)
+    let rec links:
+    type a b. (a,b) fn -> node -> unit =
+      fun fd tgt ->
+	match fd with
+	| Fun (src,fd) ->
+	  link (node src) tgt;
+	  links fd tgt
+	| Constant src ->
+	  link (node src) tgt
+    ;;
 
-  let fcheck s =
-    let span =
-      List.fold_left (fun acc (_,e) ->
+    (** Build a static graph from a signature *)
+    let graph s =
+      List.iter (fun (id,e) ->
 	match e with
-	| Sig.Elem (fd,f) -> Span.add (codom fd) (Elem (fd,f)) acc
-      ) Span.empty s in
-    let eqs =
-      fun ty valuation ->
-	let elts = Span.find ty span in
-	let old = valuation ty in
-	List.fold_left (fun acc elt ->
-	  match elt with
-	  | Span.Elem (fd,f) -> (eval valuation fd f) @ acc
-	) old elts
-    in
-    F.lfp eqs
+	| Sig.Elem (fd,_) ->
+	  let tgt = node (codom fd) in
+	  links fd (tgt);
+	  tgt.constructors <- (id,e) :: tgt.constructors
+      ) s
+
+    let rec eval :
+    type a b.  (a,b) fn -> a -> b list =
+      fun  fd f ->
+	match fd with
+	| Constant _ -> [f]
+	| Fun (ty,fd) -> (PSet.elements ty.Ty.enum) >>= fun e -> eval fd (f e)
+
+    module Workset = struct
+
+      let create () = Queue.create ()
+      let add s x = Queue.push x s
+      let repeat f s =
+	while not (Queue.is_empty s) do
+	  let n = Queue.pop s in
+	      f n
+	done
+    end
+
+    let workset = Workset.create ()
+
+    let update node =
+      match node.descr with Descr ty ->
+	if not (Ty.full ty)
+	then
+	  let updated =
+	    List.fold_left (fun updated (_,e) ->
+	      match e with
+	      | Sig.Elem (fd,f) ->
+		let ty = codom fd in
+		let l = eval fd f in
+		updated || Ty.merge ty (l)
+	    ) false node.constructors
+	  in
+	  if updated
+	  then List.iter (Workset.add workset) (successors node)
+
+    let check s =
+      graph s;
+      List.iter (fun (_,Sig.Elem (fd,_)) -> Workset.add workset (node (codom fd))) s;
+      Workset.repeat update workset;
+
+
+  end
+  let check = Graph.check
+
 end
+
 (** This is the function that you want to use: take the description of a module
  * signature, then iterate [n] times to generate elements for all the types in
  * the module. *)
-(* let ncheck n (s: Sig.t) = *)
-(*   for __ = 1 to n do *)
-(*     List.iter (fun (_id, Sig.Elem (fd, f)) -> use fd f) s; *)
-(*   done *)
 
-
-
-
-
-
+let check s = Fun.check s
 
 (* -------------------------------------------------------------------------- *)
 
@@ -328,6 +402,9 @@ module SIList = struct
   let rec add x = function
     | [] -> [x]
     | t::q -> if t < x then t :: add x q else x::t::q
+
+  let pp l = Printf.sprintf "[%s]" (String.concat ";" (List.map string_of_int l))
+
 end
 
 (** The description of the type of sorted integer lists. Elements of this type
@@ -336,7 +413,7 @@ let si_t : SIList.t ty = Ty.declare ()
 
 (** Conversely, [int] is a ground type that can not only be compared with (=),
  * but also admits a generator. *)
-let int_t : int ty = Ty.declare ~fresh:(fun _ -> Random.int 1000) ()
+let int_t : int ty = Ty.declare ~fresh:(fun _ -> Random.int 10) ()
 
 (** Populate the descriptor of the built-in type [int]. *)
 let () =
@@ -350,7 +427,7 @@ let silist_sig = Sig.([
 
 (** Generate instances of [SIList.t]. *)
 let () =
-  ncheck 5 silist_sig
+  check silist_sig
 
 (** The property that we wish to test for is that the lists are well-sorted. We
  * define a predicate for that purpose and assert that no counter-example can be
@@ -521,7 +598,7 @@ let rbt_sig = Sig.([
   val_ "insert" (int_t @-> rbt_t @-> returning rbt_t) RBT.insert;
 ])
 
-let () = ncheck 5 rbt_sig
+let () = check  rbt_sig
 
 let () =
   let prop s = let s = RBT.elements s in List.sort Pervasives.compare s = s in
@@ -547,7 +624,7 @@ let zip_sig = RBT.(rbt_sig @ Sig.([
     (fun dir -> function None -> None | Some v -> move dir v);
 ]))
 
-let () = ncheck 1 zip_sig
+let () = check zip_sig
 
 let () =
   let prop = function
