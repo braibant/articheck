@@ -400,14 +400,6 @@ end
 let check s = Fun.check s
 end
 
-module BADASS = BADASS_FUNCTOR(struct
-  type 'a t = 'a Ty.t
-  let compare a b = if a.Ty.uid = b.Ty.uid then Obj.magic Eq else Diff
-  let ty a = a
-end)
-
-include BADASS
-
 (* -------------------------------------------------------------------------- *)
 
 (** {2 Examples } *)
@@ -427,22 +419,44 @@ module SIList = struct
 
 end
 
-(** The description of the type of sorted integer lists. Elements of this type
- * can be compared using the polymorphic, structural comparison operator (=). *)
-let si_t : SIList.t ty = Ty.declare ()
+module SIList_Dyn = struct
+  (** The description of the type of sorted integer lists. Elements of this type
+   * can be compared using the polymorphic, structural comparison operator (=). *)
+  let si_t : SIList.t Ty.t = Ty.declare ()
 
-(** Conversely, [int] is a ground type that can not only be compared with (=),
- * but also admits a generator. *)
-let int_t : int ty = Ty.declare ~fresh:(fun _ -> Random.int 10) ()
+  (** Conversely, [int] is a ground type that can not only be compared with (=),
+   * but also admits a generator. *)
+  let int_t : int Ty.t = Ty.declare ~fresh:(fun _ -> Random.int 10) ()
 
-(** Populate the descriptor of the built-in type [int]. *)
-let () =
-  Ty.populate 10 int_t
+  (** Populate the descriptor of the built-in type [int]. *)
+  let () =
+    Ty.populate 10 int_t
+
+  type _ t =
+  | Int : int t
+  | Si : SIList.t t
+
+  let ty : type a . a t -> a Ty.t = function
+    | Int -> int_t
+    | Si -> si_t
+
+  let compare : type a b . a t -> b t -> (a, b) maybe_eq =
+     fun a b -> match a, b with
+       | Int, Int -> Eq
+       | Si, Si -> Eq
+       | _ -> Diff
+
+end
+
+include struct
+  module Safe = BADASS_FUNCTOR(SIList_Dyn)
+  open SIList_Dyn
+  open Safe
 
 (** Use module [Sig] to build a description of the signature of [SIList]. *)
 let silist_sig = Sig.([
-  val_ "empty" (returning si_t) SIList.empty;
-  val_ "add" (int_t @-> si_t @-> returning si_t) SIList.add;
+  val_ "empty" (returning Si) SIList.empty;
+  val_ "add" (Int @-> Si @-> returning Si) SIList.add;
 ])
 
 (** Generate instances of [SIList.t]. *)
@@ -456,7 +470,19 @@ let () =
   let prop s = List.sort Pervasives.compare s = s in
   assert (Ty.counter_example si_t prop = None);
   ()
+end
 
+
+(* I haven't gone over the rest of the code,
+   so let's use the Obj.magic assumption again for now *)
+
+module BADASS = BADASS_FUNCTOR(struct
+  type 'a t = 'a Ty.t
+  let compare a b = if a.Ty.uid = b.Ty.uid then Obj.magic Eq else Diff
+  let ty a = a
+end)
+
+include BADASS
 
 (** {3 Red-black trees } *)
 
