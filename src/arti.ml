@@ -171,8 +171,21 @@ end
 
 (** {2 Main routines for dealing with our GADT } *)
 
+
+type (_,_) maybe_eq =
+| Eq : ('a, 'a) maybe_eq
+| Diff : ('a, 'b) maybe_eq
+
+module type DynTy = sig
+  type 'a t
+  val compare : 'a t -> 'b t -> ('a, 'b) maybe_eq
+  val ty : 'a t -> 'a Ty.t
+end
+
+module BADASS_FUNCTOR (Dyn : DynTy) = struct
+
 (** The type of our type descriptors. *)
-type 'a ty = 'a Ty.t
+type 'a ty = 'a Dyn.t
 
 (** The GADT [('b, 'a) fn] describes functions of type ['b] whose return type is
  * ['a].
@@ -195,7 +208,7 @@ let (>>=) li f = List.flatten (List.map f li)
 
 (** Recursively find the descriptor that corresponds to the codomain of a
  * function. *)
-let rec codom : type a b. (a,b) fn -> b ty =
+let rec codom : type a b. (a,b) fn -> b Dyn.t =
   function
     | Fun (_,fd) -> codom fd
     | Constant ty -> ty
@@ -230,9 +243,7 @@ end
 
 module Fun = struct
 
-
-
-  type descr = Descr : 'a Ty.t -> descr
+  type descr = Descr : 'a Dyn.t -> descr
 
   module Graph = struct
     type node =
@@ -248,12 +259,11 @@ module Fun = struct
        mutable destroyed: bool}
 
     module T (X: sig type 'a value end) = struct
-      open Ty
       module HT = struct
 	include X
-	type t = Bind: 'a Ty.t * ('a value) option -> t
-	let uid = function Bind (ty,_) -> ty.uid
-	let equal t1 t2 = uid t1 = uid t2
+	type t = Bind: 'a Dyn.t * ('a value) option -> t
+	let uid = function Bind (ty,_) -> (Dyn.ty ty).Ty.uid
+	let equal t1 t2 = (uid t1 = uid t2)
 	let hash = uid
       end
       module WHT = Weak.Make(HT)
@@ -262,19 +272,21 @@ module Fun = struct
       let add t k v =
 	WHT.merge t (Bind (k,Some v))
 
-      let find t k =
+      let find (type a) t (k : a ty) : a value =
 	match WHT.find t (Bind (k,None)) with
 	| Bind (_,None) -> raise Not_found
-	| Bind (_,Some v) -> Obj.magic v
+	| Bind (k',Some v) ->
+          match Dyn.compare k k' with
+            | Diff -> raise Not_found
+            | Eq -> v
 
       let create () = WHT.create 1337
-
   end
     module N = T(struct type 'a value = node end)
 
-    let create ty =
+    let create dynty =
       {
-	descr = Descr ty;
+	descr = Descr dynty;
 	incoming = [];
 	outgoing = [];
 	constructors = [];
@@ -303,8 +315,7 @@ module Fun = struct
 
 
     let nodes = N.create ()
-    let node:
-    type t. t Ty.t -> node =
+    let node: type t. t ty -> node =
       fun ty ->
 	try N.find nodes ty
 	with Not_found ->
@@ -340,7 +351,7 @@ module Fun = struct
       fun  fd f ->
 	match fd with
 	| Constant _ -> [f]
-	| Fun (ty,fd) -> (PSet.elements ty.Ty.enum) >>= fun e -> eval fd (f e)
+	| Fun (ty,fd) -> (PSet.elements (Dyn.ty ty).Ty.enum) >>= fun e -> eval fd (f e)
 
     module Workset = struct
 
@@ -357,7 +368,7 @@ module Fun = struct
 
     let update node =
       match node.descr with Descr ty ->
-	if not (Ty.full ty)
+	if not (Ty.full (Dyn.ty ty))
 	then
 	  let updated =
 	    List.fold_left (fun updated (_,e) ->
@@ -365,7 +376,7 @@ module Fun = struct
 	      | Sig.Elem (fd,f) ->
 		let ty = codom fd in
 		let l = eval fd f in
-		updated || Ty.merge ty (l)
+		updated || Ty.merge (Dyn.ty ty) (l)
 	    ) false node.constructors
 	  in
 	  if updated
@@ -387,6 +398,15 @@ end
  * the module. *)
 
 let check s = Fun.check s
+end
+
+module BADASS = BADASS_FUNCTOR(struct
+  type 'a t = 'a Ty.t
+  let compare a b = if a.Ty.uid = b.Ty.uid then Obj.magic Eq else Diff
+  let ty a = a
+end)
+
+include BADASS
 
 (* -------------------------------------------------------------------------- *)
 
