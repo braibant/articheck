@@ -87,42 +87,63 @@ module PSet = struct
   let elements s = RBT.elements s.set
 end
 
-(** {2 The core module of our type descriptors } *)
-module Ty = struct
 
-  (** Internally, a type descriptor is made up of:
-      - a unique identifier
-      - a size annotation: the maximum number of elements of this type that we are going to build;
-      - an enumeration of the inhabitants of the type
-      - a function that generates a new ['a] different from all the
-      ['a]s we have constructed so far; this function is only available
-      for ground types (e.g.  int)
-  *)
-  type 'a t =
+type ident = string
+
+(** Internally, a type descriptor is made up of:
+    - a unique identifier
+    - a size annotation: the maximum number of elements of this type that we are going to build;
+    - an enumeration of the inhabitants of the type
+    - a function that generates a new ['a] different from all the
+    ['a]s we have constructed so far; this function is only available
+    for ground types (e.g.  int)
+*)
+type 'a ty =
     {
       uid: int;
       size: int;
       mutable enum: 'a PSet.t;
       fresh: ('a PSet.t -> 'a) option;
+      mutable constructors: (ident * 'a elem) list
     }
+and
+  (** The GADT [('b, 'a) fn] describes functions of type ['b] whose return type is
+      * ['a].
+      * - The base case is constant values: they have type ['a] and return ['a].
+      * - The other case is an arrow: from a function with type ['b] that returns
+      *   ['c], we can construct a function of type ['a -> 'b] which still returns
+      *   ['c].
+      * We attach to each branch a descriptor of the argument type ['a].
+  *)
+  (_,_) fn =
+  | Constant : 'a ty -> ('a,'a) fn
+  | Fun      : 'a ty * ('b, 'c) fn -> ('a -> 'b, 'c) fn
+and
+  'b elem =
+    Elem : ('a,'b) fn * 'a -> 'b elem
+;;
 
+
+
+(** {2 The core module of our type descriptors } *)
+module Ty = struct
 
   let gensym: unit -> int =
     let r = ref (-1) in
     fun () -> incr r; !r
 
-  let mem (x: 'a) (s: 'a t): bool =
+  let mem (x: 'a) (s: 'a ty): bool =
     PSet.mem x s.enum
 
   let full s = s.size <= PSet.cardinal s.enum
 
-  let add (x: 'a) (s: 'a t): unit =
+  let add (x: 'a) (s: 'a ty): unit =
     s.enum <- PSet.insert x s.enum
 
-  let elements (s: 'a t): 'a list =
+  let elements (s: 'a ty): 'a list =
     PSet.elements s.enum
 
-  let merge (s: 'a t) (l: 'a list) =
+  let merge (s: 'a ty) (l: 'a list) =
     let n = PSet.cardinal s.enum in
     s.enum <- List.fold_left (fun acc x -> PSet.insert x acc) s.enum l;
     n < PSet.cardinal s.enum
@@ -138,12 +159,13 @@ module Ty = struct
       ?(initial=[])
       ?fresh
       ()
-      : 'a t =
+      : 'a ty =
     {
       enum = List.fold_left (fun acc x -> PSet.insert x acc) (PSet.create cmp) initial;
       uid = gensym ();
       size = 50;
       fresh;
+      constructors = []
     }
 
   (** This function populates an existing type descriptor who has a
@@ -160,9 +182,12 @@ module Ty = struct
    * generated up to this point. This function returns [Some x] where [x] is an
    * element that fails to satisfy the property, and [None] is no such element
    * exists. *)
-  let counter_example ty f =
-    try Some (List.find (fun e -> not (f e)) (PSet.elements ty.enum))
-    with Not_found -> None
+  let counter_example msg ty f =
+    let l = PSet.elements ty.enum in
+    try Some (List.find (fun e -> not (f e)) l)
+    with Not_found ->
+      Printf.eprintf "[%.12s] Passed %i tests without counter-examples\n" msg (List.length l);
+      None
 
 
 end
@@ -170,21 +195,6 @@ end
 (* -------------------------------------------------------------------------- *)
 
 (** {2 Main routines for dealing with our GADT } *)
-
-(** The type of our type descriptors. *)
-type 'a ty = 'a Ty.t
-
-(** The GADT [('b, 'a) fn] describes functions of type ['b] whose return type is
- * ['a].
- * - The base case is constant values: they have type ['a] and return ['a].
- * - The other case is an arrow: from a function with type ['b] that returns
- *   ['c], we can construct a function of type ['a -> 'b] which still returns
- *   ['c].
- * We attach to each branch a descriptor of the argument type ['a].
- *)
-type (_,_) fn =
-| Constant : 'a ty -> ('a,'a) fn
-| Fun      : 'a ty * ('b, 'c) fn -> ('a -> 'b, 'c) fn;;
 
 (** Some constructors for our GADT. *)
 
@@ -195,89 +205,56 @@ let (>>=) li f = List.flatten (List.map f li)
 
 (** Recursively find the descriptor that corresponds to the codomain of a
  * function. *)
-let rec codom : type a b. (a,b) fn -> b ty =
-  function
-    | Fun (_,fd) -> codom fd
-    | Constant ty -> ty
-
+let rec codom :
+type a b. (a,b) fn -> b ty =
+    function
+      | Fun (_,fd) -> codom fd
+      | Constant ty -> ty
+;;
 
 
 (* -------------------------------------------------------------------------- *)
 
 (** {2 Describing signatures of modules that we wish to test } *)
 
-module Sig = struct
-  (** An element from a module signature is a function of type ['a], along with
-   * its descriptor. *)
-  type elem = Elem : ('a,'b) fn * 'a -> elem
-
-  (** Elements have a name. *)
-  type ident = string
-
-  (** Finally, a signature item is the name of the element along with the
-   * description of the element itself. *)
-  type t = (ident * elem) list
-
-  (** A helper for constructor a signature item. *)
-  let val_ id fd f = (id, Elem (fd, f))
-
+module Sig :
+sig
+  type value
+  val val_ : ident -> ('a,'b) fn -> 'a -> value
+  val populate : value list -> unit
 end
+  =
+struct
 
-
-(* -------------------------------------------------------------------------- *)
-
-(** {2 Populating the types of the module} *)
-
-module Fun = struct
-
-
-
-  type descr = Descr : 'a Ty.t -> descr
+  type descr = Descr : 'a ty -> descr
 
   module Graph = struct
     type node =
-      {descr: descr;
-       mutable incoming: edge list;
-       mutable outgoing: edge list;
-       mutable constructors: Sig.t;
-       mutable mark: bool
-      }
+	{descr: descr;
+	 mutable incoming: edge list;
+	 mutable outgoing: edge list;
+	 mutable mark: bool
+	}
     and edge =
-      {node1: node;
-       node2: node;
-       mutable destroyed: bool}
+	{node1: node;
+	 node2: node;
+	 mutable destroyed: bool}
 
-    module T (X: sig type 'a value end) = struct
-      open Ty
-      module HT = struct
-	include X
-	type t = Bind: 'a Ty.t * ('a value) option -> t
-	let uid = function Bind (ty,_) -> ty.uid
-	let equal t1 t2 = uid t1 = uid t2
+    module HT = Hashtbl.Make(
+      struct
+	type t = descr
+	let uid = function Descr d -> d.uid
 	let hash = uid
+	let equal t1 t2 = uid t1 = uid t2
       end
-      module WHT = Weak.Make(HT)
+      )
 
-      open HT
-      let add t k v =
-	WHT.merge t (Bind (k,Some v))
 
-      let find t k =
-	match WHT.find t (Bind (k,None)) with
-	| Bind (_,None) -> raise Not_found
-	| Bind (_,Some v) -> Obj.magic v
-
-      let create () = WHT.create 1337
-
-  end
-    module N = T(struct type 'a value = node end)
-
-    let create ty =
+    let create dty =
       {
-	descr = Descr ty;
+	descr = dty;
 	incoming = [];
 	outgoing = [];
-	constructors = [];
 	mark = true
       }
 
@@ -301,17 +278,16 @@ module Fun = struct
 
     (* smart constructor *)
 
-
-    let nodes = N.create ()
+    let nodes = HT.create 1337
     let node:
-    type t. t Ty.t -> node =
+    type t. t ty -> node =
       fun ty ->
-	try N.find nodes ty
+	let dty = Descr ty in
+	try HT.find nodes dty
 	with Not_found ->
-	  let node = create  ty in
-	  ignore (N.add nodes ty node);
+	  let node = create dty in
+	  ignore (HT.add nodes dty node);
 	  node
-
 
 
     let rec links:
@@ -325,22 +301,6 @@ module Fun = struct
 	  link (node src) tgt
     ;;
 
-    (** Build a static graph from a signature *)
-    let graph s =
-      List.iter (fun (id,e) ->
-	match e with
-	| Sig.Elem (fd,_) ->
-	  let tgt = node (codom fd) in
-	  links fd (tgt);
-	  tgt.constructors <- (id,e) :: tgt.constructors
-      ) s
-
-    let rec eval :
-    type a b.  (a,b) fn -> a -> b list =
-      fun  fd f ->
-	match fd with
-	| Constant _ -> [f]
-	| Fun (ty,fd) -> (PSet.elements ty.Ty.enum) >>= fun e -> eval fd (f e)
 
     module Workset = struct
 
@@ -349,11 +309,18 @@ module Fun = struct
       let repeat f s =
 	while not (Queue.is_empty s) do
 	  let n = Queue.pop s in
-	      f n
+	  f n
 	done
     end
 
     let workset = Workset.create ()
+
+    let rec eval :
+    type a b.  (a,b) fn -> a -> b list =
+	fun  fd f ->
+	  match fd with
+	    | Constant _ -> [f]
+	    | Fun (ty,fd) -> (PSet.elements ty.enum) >>= fun e -> eval fd (f e)
 
     let update node =
       match node.descr with Descr ty ->
@@ -362,31 +329,39 @@ module Fun = struct
 	  let updated =
 	    List.fold_left (fun updated (_,e) ->
 	      match e with
-	      | Sig.Elem (fd,f) ->
-		let ty = codom fd in
-		let l = eval fd f in
-		updated || Ty.merge ty (l)
-	    ) false node.constructors
+		| Elem (fd,f) ->
+		  let ty = codom fd in
+		  let l = eval fd f in
+		  updated || Ty.merge ty (l)
+	    ) false ty.constructors
 	  in
 	  if updated
 	  then List.iter (Workset.add workset) (successors node)
 
-    let check s =
-      graph s;
-      List.iter (fun (_,Sig.Elem (fd,_)) -> Workset.add workset (node (codom fd))) s;
-      Workset.repeat update workset;
-
+    let populate (l: node list) =
+      List.iter (Workset.add workset) l;
+      Workset.repeat update workset
 
   end
-  let check = Graph.check
 
+
+  type value = Graph.node
+
+  (** A helper for constructor a signature item. *)
+  let val_ id fd f : value =
+    let tgt = codom fd in
+    let node = Graph.node tgt in
+    tgt.constructors <- (id, Elem (fd,f)) :: tgt.constructors;
+    Graph.links fd node;
+    node
+
+  (** This is the function that you want to use: take the description of
+      a module signature, then use it to generate elements for all the
+      types in the module. *)
+
+  let populate (s: value list) =
+    Graph.populate s
 end
-
-(** This is the function that you want to use: take the description of a module
- * signature, then iterate [n] times to generate elements for all the types in
- * the module. *)
-
-let check s = Fun.check s
 
 (* -------------------------------------------------------------------------- *)
 
@@ -427,14 +402,14 @@ let silist_sig = Sig.([
 
 (** Generate instances of [SIList.t]. *)
 let () =
-  check silist_sig
+  Sig.populate silist_sig
 
 (** The property that we wish to test for is that the lists are well-sorted. We
  * define a predicate for that purpose and assert that no counter-example can be
  * found. *)
 let () =
   let prop s = List.sort Pervasives.compare s = s in
-  assert (Ty.counter_example si_t prop = None);
+  assert (Ty.counter_example "sorted lists" si_t prop = None);
   ()
 
 
@@ -598,36 +573,38 @@ let rbt_sig = Sig.([
   val_ "insert" (int_t @-> rbt_t @-> returning rbt_t) RBT.insert;
 ])
 
-let () = check  rbt_sig
+let () = Sig.populate  rbt_sig
 
 let () =
   let prop s = let s = RBT.elements s in List.sort Pervasives.compare s = s in
-  assert (Ty.counter_example rbt_t prop = None);
-  assert (Ty.counter_example rbt_t RBT.is_balanced = None);
+  assert (Ty.counter_example "rbt sorted" rbt_t prop = None);
+  assert (Ty.counter_example "rbt balanced" rbt_t RBT.is_balanced = None);
   ()
 
 let dir_t : RBT.direction ty = Ty.declare ~initial:RBT.([Left; Right]) ()
 let rbtopt_t : int RBT.t option ty = Ty.declare ()
 let ptropt_t : int RBT.pointer option ty = Ty.declare ()
 
-let zip_sig = RBT.(rbt_sig @ Sig.([
-  val_ "Some" (rbt_t @-> returning rbtopt_t)
-    (fun z -> Some z);
-  val_ "some zip_open" (rbt_t @-> returning ptropt_t)
-    (fun v -> Some (zip_open v));
-  val_ "some zip_close" (ptropt_t @-> returning rbtopt_t)
-    (function None -> None | Some v -> Some (zip_close v));
+let zip_sig =
+  let open RBT in
+  Sig.(rbt_sig @
+	 [
+	   val_ "Some" (rbt_t @-> returning rbtopt_t)
+	     (fun z -> Some z);
+	   val_ "some zip_open" (rbt_t @-> returning ptropt_t)
+	     (fun v -> Some (zip_open v));
+	   val_ "some zip_close" (ptropt_t @-> returning rbtopt_t)
+	     (function None -> None | Some v -> Some (zip_close v));
+	   val_ "move_up" (ptropt_t @-> returning ptropt_t)
+	     (function None -> None | Some v -> move_up v);
+	   val_ "move" (dir_t @-> ptropt_t @-> returning ptropt_t)
+	     (fun dir -> function None -> None | Some v -> move dir v);
+	 ])
 
-  val_ "move_up" (ptropt_t @-> returning ptropt_t)
-    (function None -> None | Some v -> move_up v);
-  val_ "move" (dir_t @-> ptropt_t @-> returning ptropt_t)
-    (fun dir -> function None -> None | Some v -> move dir v);
-]))
-
-let () = check zip_sig
+let () = Sig.populate zip_sig
 
 let () =
   let prop = function
     | None -> true
     | Some v -> RBT.is_balanced v in
-  assert (Ty.counter_example rbtopt_t prop = None)
+  assert (Ty.counter_example "rbt balanced" rbtopt_t prop = None)
