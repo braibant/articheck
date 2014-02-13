@@ -1,14 +1,17 @@
-all: arti
+.PHONY all:
+	ocamlbuild -I example silist.native rbt.native
 
-arti: arti.ml
-	ocamlfind ocamlopt -g -annot -bin-annot -w @1..3@8..12@14..21@23..40-41@43 $< -o $@
+# arti: arti.ml
+# 	ocamlfind ocamlopt -g -annot -bin-annot -w @1..3@8..12@14..21@23..40-41@43 $< -o $@
 
 clean:
-	rm -f *.cm* arti *.o *.annot
+	ocamlbuild -clean
 
-test: arti
-	./arti
+test: all
+	./silist.native
+	./rbt.native
 
 doc: arti
 	mkdir -p ../doc/
-	ocamldoc -d ../doc/ -html *.ml
+	ocamldoc -I _build -d ../doc/ -html *.ml
+
