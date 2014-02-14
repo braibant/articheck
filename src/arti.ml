@@ -104,7 +104,7 @@ type 'a ty =
       size: int;
       mutable enum: 'a PSet.t;
       fresh: ('a PSet.t -> 'a) option;
-      mutable constructors: (ident * 'a elem) list
+      mutable constructors: (ident * 'a elem) list;
     }
 and
   (** The GADT [('b, 'a) fn] describes functions of type ['b] whose return type is
