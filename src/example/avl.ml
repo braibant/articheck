@@ -7,10 +7,15 @@ module AVL = struct
 
   let empty = L
 
+  let rec real_height = function
+    | L -> 0
+    | N (l, _, r, _) -> 1 + max (real_height l) (real_height r)
+
   let height = function
     | L -> 0
-    | N (_,_,_,h) ->
+    | N (_,_,_,h) as t ->
       assert (0 < h);
+      assert (real_height t = h);
       h
 
   let mk_node l v r =
@@ -34,7 +39,7 @@ module AVL = struct
     assert (abs (height l - height r) <= 2);
     if abs (height l - height r) <= 1
     then  mk_node l a r
-    else
+    else (* imbalance is two: we need to rebalance *)
       if height l - height r = 2
       then
 	match l with
@@ -75,13 +80,16 @@ module AVL = struct
       | N (l,v,r,h) ->
 	let hl = check_height l in
 	let hr = check_height r in
-	assert (abs (hl - hr) <= 1);
 	assert (h = 1 + max hl hr);
+	assert (abs (hl - hr) <= 1);
 	h
     in
     try ignore (check_height t); true
-    with _ ->
-      Printf.eprintf "%s\n" (pp t);
+    with e ->
+      Printf.eprintf "%s\n" (Printexc.to_string e);
+      Printexc.print_backtrace stderr;
+      Printf.eprintf "The exception above was raised by the following graph:\
+        \n  %s\n" (pp t);
       false
 
 
