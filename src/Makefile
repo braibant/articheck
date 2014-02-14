@@ -10,6 +10,7 @@ clean:
 test: all
 	./silist.native
 	./rbt.native
+	./avl.native
 
 doc: arti
 	mkdir -p ../doc/
