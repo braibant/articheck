@@ -41,20 +41,20 @@ module AVL = struct
     then  mk_node l a r
     else (* imbalance is two: we need to rebalance *)
       if height l - height r = 2
-      then
-	match l with
-	| L -> assert false
-	| N (ll,lv,lr,_) ->
-	    if balance_factor ll = (-1)
-	    then rotate_right (N (mk_node (rotate_left ll) lv lr,a,r,-1))
-	    else rotate_right (N (l,a,r,-1))
-      else 				(* -2 *)
-	match r with
-	| L -> assert false
-	| N (rl,rv,rr,_) ->
-	  if balance_factor rr = 1
-	  then rotate_left (N (l,a,mk_node rl rv (rotate_left rr), -1))
-	  else rotate_left (N (l,a,r,-1))
+      then (* too many elements on the left subtree *)
+        match l with
+        | L -> assert false
+        | N (ll,lv,lr,_) ->
+            if balance_factor ll = (-1)
+            then rotate_right (N (mk_node (rotate_left ll) lv lr,a,r,-1))
+            else rotate_right (N (l,a,r,-1))
+      else (* too many elements on the right subtree *)
+        match r with
+        | L -> assert false
+        | N (rl,rv,rr,_) ->
+          if balance_factor rr = 1
+          then rotate_left (N (l,a,mk_node rl rv (rotate_left rr), -1))
+          else rotate_left (N (l,a,r,-1))
 
   let rec insert x = function
     | L -> mk_node L x L
@@ -68,7 +68,7 @@ module AVL = struct
   let rec elements = function
     | L -> []
     | N (l,v,r,_) ->
-	elements l @ (v::elements r)
+        elements l @ (v::elements r)
 
   let rec pp = function
     | L -> "."
@@ -78,11 +78,11 @@ module AVL = struct
     let rec check_height = function
       | L -> 0
       | N (l,v,r,h) ->
-	let hl = check_height l in
-	let hr = check_height r in
-	assert (h = 1 + max hl hr);
-	assert (abs (hl - hr) <= 1);
-	h
+        let hl = check_height l in
+        let hr = check_height r in
+        assert (h = 1 + max hl hr);
+        assert (abs (hl - hr) <= 1);
+        h
     in
     try ignore (check_height t); true
     with e ->
