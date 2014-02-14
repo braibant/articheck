@@ -59,12 +59,44 @@ module AVL = struct
 
   let rec insert x = function
     | L -> mk_node L x L
-    | N (l,v,r,h) as t ->
+    | N (l,v,r,_) as t ->
       if x < v
       then balance (insert x l) v r
       else if x > v
       then balance l v (insert x r)
       else t
+
+  let rec find_min = function
+    | L -> assert false
+    | N (L, v, L, _) ->
+        v
+    | N (l, _, r, _) ->
+        min (find_min l) (find_min r)
+
+  let rec find_max = function
+    | L -> assert false
+    | N (L, v, L, _) ->
+        v
+    | N (l, _, r, _) ->
+        max (find_max l) (find_max r)
+
+  let rec remove k = function
+    | L -> L
+    | N (l, v, r, _) ->
+        if k < v then
+          balance (remove k l) v r
+        else if k > v then
+          balance l v (remove k r)
+        else (* k = v *)
+          match l, r with
+          | L, L ->
+              L
+          | N _, _ ->
+              let m = find_max l in
+              balance (remove m l) m r
+          | _, N _ ->
+              let m = find_min l in
+              balance l m (remove m r)
 
   let rec elements = function
     | L -> []
@@ -78,7 +110,7 @@ module AVL = struct
   let is_balanced t =
     let rec check_height = function
       | L -> 0
-      | N (l,v,r,h) ->
+      | N (l,_,r,h) ->
         let hl = check_height l in
         let hr = check_height r in
         assert (h = 1 + max hl hr);
@@ -105,6 +137,7 @@ let () = Ty.populate 5 int_t
 let avl_sig = Sig.([
   val_ "empty" (returning avl_t) AVL.empty;
   val_ "insert" (int_t @-> avl_t @-> returning avl_t) AVL.insert;
+  val_ "remove" (int_t @-> avl_t @-> returning avl_t) AVL.insert;
 ])
 
 let () = Sig.populate  avl_sig

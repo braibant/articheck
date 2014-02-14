@@ -24,15 +24,17 @@ module PSet = struct
 	  | _ -> mem compare x r
 	end
 
-    type color = R | B
+    (* FIXME why are these unused? *)
 
-    let color = function
-      | Red _ -> R
-      | Empty | Black _ -> B
+    (* type color = R | B *)
 
-    let mk col l v r = match col with
-      | B -> Black (l, v, r)
-      | R -> Red (l, v, r)
+    (* let color = function *)
+    (*   | Red _ -> R *)
+    (*   | Empty | Black _ -> B *)
+
+    (* let mk col l v r = match col with *)
+    (*   | B -> Black (l, v, r) *)
+    (*   | R -> Red (l, v, r) *)
 
     let blacken = function
       | Red (l,v,r) -> Black (l,v,r)
@@ -80,7 +82,7 @@ module PSet = struct
       compare: 'a -> 'a -> int;
     }
 
-  let create compare = {set= RBT.Empty; compare}
+  let create compare = {set= RBT.empty; compare}
   let insert x s = {s with set = RBT.insert s.compare x s.set}
   let mem x s = RBT.mem s.compare x s.set
   let cardinal s = RBT.cardinal s.set
