@@ -21,16 +21,6 @@ module AVL = struct
   let mk_node l v r =
     N (l,v,r, 1 + max (height l) (height r))
 
-  let rotate_left = function
-    | N (a,p, N (b,q,c,_), _) ->
-      mk_node (mk_node a p b) q c
-    | _ -> assert false
-
-  let rotate_right = function
-    | N (N (a,p,b,_),q, c,_) ->
-      mk_node a p (mk_node b q c)
-    | _ -> assert false
-
   let balance_factor = function
     | N (l,_,r,_) -> height l - height r
     | L -> 0
@@ -45,16 +35,27 @@ module AVL = struct
         match l with
         | L -> assert false
         | N (ll,lv,lr,_) ->
-            if balance_factor ll = (-1)
-            then rotate_right (N (mk_node (rotate_left ll) lv lr,a,r,-1))
-            else rotate_right (N (l,a,r,-1))
+            if balance_factor l = (-1)
+            then (* Symmetrical of Case 2 *)
+              match lr with
+              | L -> assert false
+              | N (lrl, lrv, lrr, _) ->
+                  mk_node (mk_node ll lv lrl) lrv (mk_node lrr a r)
+            else (* Symmetrical of Case 1 *)
+              mk_node ll lv (mk_node lr a r)
       else (* too many elements on the right subtree *)
         match r with
         | L -> assert false
         | N (rl,rv,rr,_) ->
-          if balance_factor rr = 1
-          then rotate_left (N (l,a,mk_node rl rv (rotate_left rr), -1))
-          else rotate_left (N (l,a,r,-1))
+            if balance_factor r = 1
+            then (* Case 2 of Knuth *)
+              match rl with
+              | L -> assert false
+              | N (rll, rlv, rlr, _) ->
+                  mk_node (mk_node l a rll) rlv (mk_node rlr rv rr) 
+            else (* Case 1 of Knuth *)
+              mk_node (mk_node l a rl) rv rr
+
 
   let rec insert x = function
     | L -> mk_node L x L
