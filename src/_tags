@@ -1,1 +1,1 @@
-true: debug,annot,bin_annot
+true: debug,annot,bin_annot,my_warnings
