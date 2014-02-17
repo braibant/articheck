@@ -1,0 +1,77 @@
+\documentclass[nonatbib]{sigplanconf}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8x]{inputenc}
+
+\begin{document}
+
+% For ACM, explicitly specify A4 paper.
+% For us, no need to specify it (but check your TeX configuration if
+% you insist on producing a specific size).
+\special{papersize=8.5in,11in}
+\setlength{\pdfpageheight}{\paperheight}
+\setlength{\pdfpagewidth}{\paperwidth}
+
+\exclusivelicense
+
+\conferenceinfo{ICFP~'14}{September 1--3, 2014, Copenhagen, Denmark}
+\copyrightyear{2014}
+\copyrightdata{978-1-nnnn-nnnn-n/yy/mm} 
+\doi{nnnnnnn.nnnnnnn}
+
+\title{Functional pearl: zero-knowledge testing for module interfaces}
+
+\authorinfo{
+  Thomas Braibant \quad
+  Jacques-Henri Jourdan \quad
+  Jonathan Protzenko \quad
+  Gabriel Scherer
+}{
+  INRIA
+}{http://gallium.inria.fr/blog/}
+% \authorinfo{Thomas Braibant}
+%            {INRIA}
+%            {thomas.braibant@inria.fr}
+% \authorinfo{Jacques-Henri Jourdan}
+%            {INRIA}
+%            {jacques-henri.jourdan@inria.fr}
+% \authorinfo{Jonathan Protzenko}
+%            {INRIA}
+%            {jonathan.protzenko@ens-lyon.org}
+% \authorinfo{Gabriel Scherer}
+%            {INRIA}
+%            {gabriel.scherer@inria.fr}
+
+\maketitle
+
+\begin{abstract}
+  In spite of recent advances in full program certification, testing remains a
+  widely-used component of the software development cycle. Various flavors of
+  testing exist: popular ones include \emph{unit testing}, which consists in
+  manually crafting test cases for specific parts of the code base, as well as
+  quickcheck-style testing, where instances of a type are automatically
+  generated to serve as test inputs.
+
+  These classical methods of testing can be thought of as \emph{internal}
+  testing: the test routines access the internal representation of whatever
+  module should be checked. We propose a new method of \emph{external} testing
+  where test code checks an \emph{abstract} data structure. Our new testing
+  method takes a description of a \emph{module signature}, then builds sequences
+  of function calls that generate elements of the abstract type just like any other
+  client code. Our testing framework thus builds elements that respect the
+  invariants hidden by the module signature.
+\end{abstract}
+
+\category{CR-number}{subcategory}{third-level}
+
+\keywords{
+functional programming,
+testing,
+quickcheck
+}
+
+\bibliographystyle{plain}
+\hbadness=10000
+\bibliography{local}
+
+\end{document}

@@ -3,3 +3,15 @@ arti
 *.o
 *.annot
 doc/
+*.aux
+*.bbl
+*.blg
+*.out
+*.log
+*.nav
+*.toc
+*.snm
+*.vrb
+*.thm
+*.cb
+*.cb2
