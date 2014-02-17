@@ -137,7 +137,7 @@ module Ty = struct
   let mem (x: 'a) (s: 'a ty): bool =
     PSet.mem x s.enum
 
-  let full s = s.size <= PSet.cardinal s.enum
+  let cardinal s = PSet.cardinal s.enum
 
   let add (x: 'a) (s: 'a ty): unit =
     s.enum <- PSet.insert x s.enum
@@ -165,7 +165,7 @@ module Ty = struct
     {
       enum = List.fold_left (fun acc x -> PSet.insert x acc) (PSet.create cmp) initial;
       uid = gensym ();
-      size = 50;
+      size = 1000;
       fresh;
       constructors = []
     }
@@ -174,7 +174,7 @@ module Ty = struct
       built-in generator by calling repeatedly the said generator. *)
   let populate n ty =
     match ty.fresh with
-    | None -> invalid_arg "populate"
+    | None -> ()
     | Some fresh ->
       for __ = 0 to n - 1 do
         (add (fresh ty.enum) ty)
@@ -230,18 +230,7 @@ struct
 
   type descr = Descr : 'a ty -> descr
 
-  module Graph = struct
-    type node =
-	{descr: descr;
-	 mutable incoming: edge list;
-	 mutable outgoing: edge list;
-	 mutable mark: bool
-	}
-    and edge =
-	{node1: node;
-	 node2: node;
-	 mutable destroyed: bool}
-
+  module M = struct
     module HT = Hashtbl.Make(
       struct
 	type t = descr
@@ -250,119 +239,74 @@ struct
 	let equal t1 t2 = uid t1 = uid t2
       end
       )
-
-
-    let create dty =
-      {
-	descr = dty;
-	incoming = [];
-	outgoing = [];
-	mark = true
-      }
-
-    let link (n1: node) (n2: node) =
-      let e = {node1 = n1; node2 = n2; destroyed = false} in
-      n1.outgoing <- e::n1.outgoing;
-      n2.outgoing <- e::n2.outgoing
-
-    let follow src edge =
-      if edge.node1 == src then
-	edge.node2
-      else begin
-	assert (edge.node2 == src);
-	edge.node1
-      end
-
-    let successors node =
-      let successors = List.filter (fun edge -> not edge.destroyed) node.outgoing in
-      node.outgoing <- successors;
-      List.map (follow node) successors
-
-    (* smart constructor *)
-
-    let nodes = HT.create 1337
-    let node:
-    type t. t ty -> node =
-      fun ty ->
-	let dty = Descr ty in
-	try HT.find nodes dty
-	with Not_found ->
-	  let node = create dty in
-	  ignore (HT.add nodes dty node);
-	  node
-
-
-    let rec links:
-    type a b. (a,b) fn -> node -> unit =
-      fun fd tgt ->
-	match fd with
-	| Fun (src,fd) ->
-	  link (node src) tgt;
-	  links fd tgt
-	| Constant src ->
-	  link (node src) tgt
-    ;;
-
-
-    module Workset = struct
-
-      let create () = Queue.create ()
-      let add s x = Queue.push x s
-      let repeat f s =
-	while not (Queue.is_empty s) do
-	  let n = Queue.pop s in
-	  f n
-	done
-    end
-
-    let workset = Workset.create ()
-
-    let rec eval :
-    type a b.  (a,b) fn -> a -> b list =
-	fun  fd f ->
-	  match fd with
-	    | Constant _ -> [f]
-	    | Fun (ty,fd) -> (PSet.elements ty.enum) >>= fun e -> eval fd (f e)
-
-    let update node =
-      match node.descr with Descr ty ->
-	if not (Ty.full ty)
-	then
-	  let updated =
-	    List.fold_left (fun updated (_,e) ->
-	      match e with
-		| Elem (fd,f) ->
-		  let ty = codom fd in
-		  let l = eval fd f in
-		  updated || Ty.merge ty (l)
-	    ) false ty.constructors
-	  in
-	  if updated
-	  then List.iter (Workset.add workset) (successors node)
-
-    let populate (l: node list) =
-      List.iter (Workset.add workset) l;
-      Workset.repeat update workset
-
+    type key = descr
+    type 'a t = 'a HT.t
+    let create () = HT.create 1337
+    let clear ht = HT.clear ht
+    let add k v ht = HT.add ht k v
+    let find k ht = HT.find ht k
+    let iter f ht = HT.iter f ht
   end
 
+  module P = struct
+    type property = int
+    let bottom = 0
+    let equal = (=)
+    let is_maximal (_:property) = false
+  end
 
-  type value = Graph.node
+  module F = Fix.Make(M)(P)
+
+  let touch env ty = ignore (env (Descr ty))
+
+  let rec eval :
+    type a b.  F.valuation ->(a,b) fn -> a -> b list =
+      fun env fd f ->
+	  match fd with
+	    | Constant ty -> touch env ty; [f]
+	    | Fun (ty,fd) -> touch env ty;
+	      (PSet.elements ty.enum) >>= fun e -> eval env fd (f e)
+
+  let populate =
+    let eqs : F.variable -> (F.valuation -> F.property) = fun dty env ->
+      match dty with
+      | Descr ty ->
+	begin
+	  let c =  Ty.cardinal ty in
+	  if ty.size <= c
+	  then 				(* full *)
+	    c
+	  else
+	    begin
+	      (* use the proper constructors *)
+	      List.iter (fun (_,e) ->
+		match e with
+		| Elem (fd,f) ->
+		  let ty = codom fd in
+		  let l = eval env fd f in
+		  ignore (Ty.merge ty l)
+	      ) ty.constructors;
+	      (* use fresh *)
+	      Ty.populate 10 ty;
+	      Ty.cardinal ty
+	    end
+	end
+    in
+    F.lfp eqs
+
+  type value = descr
 
   (** A helper for constructor a signature item. *)
   let val_ id fd f : value =
     let tgt = codom fd in
-    let node = Graph.node tgt in
     tgt.constructors <- (id, Elem (fd,f)) :: tgt.constructors;
-    Graph.links fd node;
-    node
+    Descr tgt
 
   (** This is the function that you want to use: take the description of
       a module signature, then use it to generate elements for all the
       types in the module. *)
 
-  let populate (s: value list) =
-    Graph.populate s
+  let populate (s: value list) = List.iter (fun dty -> ignore (populate dty)) s
 end
 
 
