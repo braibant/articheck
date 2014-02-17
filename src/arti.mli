@@ -26,7 +26,7 @@ type (_, _) fn =
 module Ty :
   sig
     val mem : 'a -> 'a ty -> bool
-    val full : 'a ty -> bool
+    val cardinal : 'a ty -> int
     val add : 'a -> 'a ty -> unit
     val elements : 'a ty -> 'a list
     val merge : 'a ty -> 'a list -> bool

@@ -52,7 +52,7 @@ module AVL = struct
               match rl with
               | L -> assert false
               | N (rll, rlv, rlr, _) ->
-                  mk_node (mk_node l a rll) rlv (mk_node rlr rv rr) 
+                  mk_node (mk_node l a rll) rlv (mk_node rlr rv rr)
             else (* Case 1 of Knuth *)
               mk_node (mk_node l a rl) rv rr
 
@@ -130,7 +130,7 @@ module AVL = struct
 end
 
 let avl_t : int AVL.t ty = Ty.declare ()
-let int_t : int ty = Ty.declare ~fresh:(fun _ -> Random.int 10) ()
+let int_t : int ty = Ty.declare ~fresh:(fun _ -> Random.int 1000) ()
 let () = Ty.populate 5 int_t
 
 

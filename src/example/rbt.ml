@@ -152,7 +152,7 @@ module RBT : RBT  = struct
 end
 
 let rbt_t : int RBT.t ty = Ty.declare ()
-let int_t : int ty = Ty.declare ~fresh:(fun _ -> Random.int 10) ()
+let int_t : int ty = Ty.declare ~fresh:(fun _ -> Random.int 1000) ()
 let () = Ty.populate 5 int_t
 
 let rbt_sig = Sig.([
