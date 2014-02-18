@@ -6,16 +6,6 @@ type ('a, 'b) sum =
 | L of 'a
 | R of 'b
 
-(** Auxiliary functions on lists *)
-let concat_map f li = List.flatten (List.map f li)
-let cartesian_product la lb =
-  let rec prod acc = function
-    | [] -> acc
-    | b::lb ->
-      let lab = List.rev_map (fun a -> (a, b)) la in
-      prod (List.rev_append lab acc) lb
-  in prod [] lb
-
 (** {2 Polymorphic sets, implemented as RBT}  *)
 module PSet = struct
 
@@ -39,18 +29,6 @@ module PSet = struct
 	  | 0 -> true
 	  | _ -> mem compare x r
 	end
-
-    (* FIXME why are these unused? *)
-
-    (* type color = R | B *)
-
-    (* let color = function *)
-    (*   | Red _ -> R *)
-    (*   | Empty | Black _ -> B *)
-
-    (* let mk col l v r = match col with *)
-    (*   | B -> Black (l, v, r) *)
-    (*   | R -> Red (l, v, r) *)
 
     let blacken = function
       | Red (l,v,r) -> Black (l,v,r)
@@ -86,6 +64,21 @@ module PSet = struct
       | Red (l,v,r) | Black (l, v, r) ->
 	elements l @ (v::elements r)
 
+    (* let rec fold_left f acc = function *)
+    (*   | Empty -> acc *)
+    (*   | Red (l,v,r) | Black (l,v,r) -> *)
+    (* 	let acc = fold_left f acc l in *)
+    (* 	let acc = f acc v in *)
+    (* 	fold_left f acc r *)
+
+    let rec iter f = function
+      | Empty -> ()
+      | Red (l,v,r) | Black (l,v,r) ->
+	iter f l;
+	f v;
+	iter f r
+
+
     let rec cardinal = function
       | Empty -> 0
       | Red (l,_,r) | Black (l,_,r) -> cardinal l + cardinal r + 1
@@ -103,8 +96,9 @@ module PSet = struct
   let mem x s = RBT.mem s.compare x s.set
   let cardinal s = RBT.cardinal s.set
   let elements s = RBT.elements s.set
+  (* let fold_left f acc s  = RBT.fold_left f acc s.set *)
+  let iter f s = RBT.iter f s.set
 end
-
 
 type ident = string
 
@@ -120,6 +114,7 @@ type 'a ty =
     {
       uid: int;
       size: int;
+      ident: string;
       mutable enum: 'a PSet.t;
       fresh: ('a PSet.t -> 'a) option;
     }
@@ -183,12 +178,6 @@ module Ty = struct
 
   let elements (s: 'a ty): 'a list =
     PSet.elements s.enum
-(*
-  let merge (s: 'a ty) (l: 'a list) =
-    let n = PSet.cardinal s.enum in
-    s.enum <- List.fold_left (fun acc x -> PSet.insert x acc) s.enum l;
-    n < PSet.cardinal s.enum
-*)
 
   (* ------------------------------------------------------------------------ *)
 
@@ -199,6 +188,7 @@ module Ty = struct
   let declare
       ?(cmp=(Pervasives.compare))
       ?(initial=[])
+      ?(ident="<abstract>")
       ?fresh
       ()
       : 'a ty =
@@ -207,6 +197,7 @@ module Ty = struct
       uid = gensym ();
       size = 1000;
       fresh;
+      ident
     }
 
   (** This function populates an existing type descriptor who has a
@@ -297,51 +288,101 @@ struct
 
   module F = Fix.Make(M)(P)
 
-  let in_env env ty =
-    ignore (env (Atom ty));
-    PSet.elements ty.enum
+  module Eval = struct
+
+    type _ set =
+      | Set   : 'a PSet.t -> 'a set
+      | Union   : 'a set * 'b set -> ('a,'b) sum set
+      | Product : 'a set * 'b set -> ('a * 'b) set
+
+    let rec iter:
+    type a.  (a -> unit) -> a set -> unit = fun f s ->
+      begin match s with
+	| Set ps -> PSet.iter f  ps
+	| Union (pa,pb) ->
+	  iter (fun a -> f (L a)) pa;
+	  iter (fun b -> f (R b)) pb;
+	| Product (pa,pb) ->
+	  iter (fun a -> iter (fun b -> f (a,b)) pb) pa
+      end
+
+    type (_,_) scaffold =
+      | Nil : 'a positive -> ('a,'a) scaffold
+      | Cons: 'a set * ('b,'c) scaffold -> ('a -> 'b,'c) scaffold
+
 
     (** Now comes the reason for separating positives and negatives in
-        two distinct groups: they are used in very different ways to
-        produce new elements.
-        
-        When available, a function of type [a], described as a [(a, b)
-        negative], can be applied to deduce new values of type
-        [b]. This requires producing known values for its (positive)
-        arguments.
-    *)
-    let rec apply
-    : type a b . F.valuation -> (a, b) negative -> a -> b list =
-      fun env ty v -> match ty with
-        | Ret _p -> [v]
-        | Fun (p, n) ->
-          produce env p |> concat_map (fun a -> apply env n (v a))
+	two distinct groups: they are used in very different ways to
+	produce new elements.
 
-    and produce
-    : type a . F.valuation -> a positive -> a list = fun env ->
+	When available, a function of type [a], described as a [(a, b)
+	negative], can be applied to deduce new values of type
+	[b]. This requires producing known values for its (positive)
+	arguments.
+
+	There are two pitfalls here.
+
+	First, it is completely inefficient to build a list of results
+	by evaluating a function and merge them in the codom type
+	afterwards. This list is potentially big, and one can run into
+	Stack_overflow issues.
+
+	Second, it is tempting to add new elements to the mutable
+	enumeration of the types on the fly, but we can run into
+	non-termination, as soon as we have a function of type [t -> _
+	-> t].
+
+	Therefore, we proceed by building a scaffold (a snapshot of the
+	enumeration of the types before evaluating the function), and
+	will iterate on this fix snapshot.  *)
+
+    let rec scaffold:
+    type a b. F.valuation -> (a,b) negative -> (a,b) scaffold = fun env ->
+	function
+	  | Ret p -> Nil p
+	  | Fun (p,n) -> Cons (produce env p,(scaffold env n))
+    and
+      produce:
+    type a. F.valuation -> a positive -> a set = fun env ->
       function
-      | Ty ty -> in_env env ty
-      | Prod (pa, pb) ->
-        cartesian_product (produce env pa) (produce env pb)
-      | Sum (pa, pb) ->
-        let la = List.rev_map (fun v -> L v) (produce env pa) in
-        let lb = List.rev_map (fun v -> R v) (produce env pb) in
-        List.rev_append la lb
+	| Ty ty ->
+	  ignore (env (Atom ty));
+	  Set (ty.enum)
+	| Prod (pa,pb) ->
+	  Product (produce env pa, produce env pb)
+	| Sum (pa, pb) ->
+	  Union (produce env pa, produce env pb)
 
-  (** A positive datatype can be destructed by pattern-matching to
-      discover new values for the atomic types at its leaves. *)
-  let rec destruct : type a . a positive -> a -> unit = function
-    | Ty ty -> begin fun v -> Ty.add v ty end
-    | Prod (ta, tb) ->
-      begin fun (a, b) ->
-        destruct ta a;
-        destruct tb b;
-      end
-    | Sum (ta, tb) ->
-      begin function
-        | L a -> destruct ta a
-        | R b -> destruct tb b
-      end
+    (** A positive datatype can be destructed by pattern-matching to
+	discover new values for the atomic types at its leaves. *)
+    let rec destruct:
+    type a . a positive -> a -> unit = function
+      | Ty ty -> begin fun v -> Ty.add v ty end
+      | Prod (ta, tb) ->
+	begin fun (a, b) ->
+          destruct ta a;
+          destruct tb b;
+	end
+      | Sum (ta, tb) ->
+	begin function
+          | L a -> destruct ta a
+          | R b -> destruct tb b
+	end
+
+    let rec eval:
+    type a b. (a,b) scaffold -> a -> unit = fun sd f ->
+      match sd with
+	| Nil p -> destruct p f
+	| Cons (s,sd) ->
+	  iter (fun e -> eval sd (f e)) s
+
+    let main:
+    type a b. F.valuation -> (a,b) negative -> a -> unit = fun env n f ->
+      let sd = scaffold env n in
+      eval sd f
+
+  end
+
 
   let populate sig_ =
     let eqs : F.variable -> (F.valuation -> F.property) =
@@ -349,10 +390,10 @@ struct
 	(* use the proper constructors *)
 	List.iter (fun (_, Elem (fd, f)) ->
 	  let pos = codom fd in
-          if List.exists (eq_atom atom) (atoms pos) then begin
-	    let li = apply env fd f in
-            List.iter (destruct pos) li
-          end
+          if List.exists (eq_atom atom) (atoms pos) then
+	    begin
+	      Eval.main env fd f
+            end
 	) sig_;
 	(* use fresh *)
         let (Atom ty) = atom in
@@ -360,6 +401,7 @@ struct
 	{ produced = Ty.cardinal ty;
           required = ty.size }
     in F.lfp eqs
+
 
   type value = string * elem
 
@@ -376,5 +418,3 @@ struct
       List.iter popa (atoms (codom fd)) in
     List.iter trigger s
 end
-
-

@@ -1,6 +1,6 @@
-open Arti
+ open Arti
 
-module SIList = struct
+ module SIList = struct
   type t = int list
 
   let empty = []
@@ -9,7 +9,7 @@ module SIList = struct
     | [] -> [x]
     | t::q -> if t < x then t :: add x q else x::t::q
 
-  let pp l = Printf.sprintf "[%s]" (String.concat ";" (List.map string_of_int l))
+  (* let pp l = Printf.sprintf "[%s]" (String.concat ";" (List.map string_of_int l)) *)
 
 end
 

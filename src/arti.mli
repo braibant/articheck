@@ -37,7 +37,9 @@ module Ty :
     val elements : 'a ty -> 'a list
     val declare :
       ?cmp:('a -> 'a -> int) ->
-      ?initial:'a list -> ?fresh:('a PSet.t -> 'a) -> unit -> 'a ty
+      ?initial:'a list ->
+      ?ident:string ->
+      ?fresh:('a PSet.t -> 'a) -> unit -> 'a ty
     val populate : int -> 'a ty -> unit
     val counter_example : string -> 'a ty -> ('a -> bool) -> 'a option
   end
@@ -61,4 +63,3 @@ module Sig :
     val val_ : ident -> ('a, 'b) negative -> 'a -> value
     val populate : value list -> unit
   end
-
