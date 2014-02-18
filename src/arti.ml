@@ -70,6 +70,13 @@ module PSet = struct
       | Red (l,v,r) | Black (l, v, r) ->
 	elements l @ (v::elements r)
 
+    let rec fold_left f acc = function
+      | Empty -> acc
+      | Red (l,v,r) | Black (l,v,r) ->
+	let acc = fold_left f acc l in
+	let acc = f acc v in
+	fold_left f acc r
+
     let rec cardinal = function
       | Empty -> 0
       | Red (l,_,r) | Black (l,_,r) -> cardinal l + cardinal r + 1
@@ -87,6 +94,7 @@ module PSet = struct
   let mem x s = RBT.mem s.compare x s.set
   let cardinal s = RBT.cardinal s.set
   let elements s = RBT.elements s.set
+  let fold_left f acc s  = RBT.fold_left f acc s.set
 end
 
 
@@ -203,8 +211,6 @@ end
 let (@->) ty fd = Fun (ty,fd)
 let returning ty = Constant ty
 
-let (>>=) li f = List.flatten (List.map f li)
-
 (** Recursively find the descriptor that corresponds to the codomain of a
  * function. *)
 let rec codom :
@@ -257,15 +263,58 @@ struct
 
   module F = Fix.Make(M)(P)
 
-  let touch env ty = ignore (env (Descr ty))
+  module Eval = struct
+    (* There are two pitfalls here.
 
-  let rec eval :
-    type a b.  F.valuation ->(a,b) fn -> a -> b list =
-      fun env fd f ->
-	  match fd with
-	    | Constant ty -> touch env ty; [f]
-	    | Fun (ty,fd) -> touch env ty;
-	      (PSet.elements ty.enum) >>= fun e -> eval env fd (f e)
+       First, it is completely inefficient to build a list of results
+       by evaluating a function and merge them in the codom type
+       afterwards. This list is potentially big, and one can run into
+       Stack_overflow issues.
+
+       Second, it is tempting to add new elements to the mutable
+       enumeration of the types on the fly, but we can run into
+       non-termination, as soon as we have a function of type [t -> _
+       -> t].
+
+       Therefore, we proceed by building a scaffold (a snapshot of the
+       enumeration of the types before evaluating the function), and
+       will iterate on this fix snapshot.  *)
+
+    type (_,_) scaffold =
+      | Nil : ('a,'a) scaffold
+      | Cons: 'a PSet.t * ('b,'c) scaffold -> ('a -> 'b,'c) scaffold
+
+    let rec scaffold:
+    type a b. (a,b) fn -> (a,b) scaffold =
+	function
+	  | Constant _ -> Nil
+	  | Fun (ty,fd) -> Cons (ty.enum,(scaffold fd))
+
+
+
+    let rec eval :
+    type a b. (a,b) scaffold -> a -> b PSet.t -> b PSet.t  =
+	fun sd f acc ->
+	  match sd with
+	    | Nil -> PSet.insert f acc
+	    | Cons (s,sd) ->
+	      PSet.fold_left (fun acc e -> eval sd (f e) acc) acc s
+
+  end
+
+  let rec touch:
+  type a b. F.valuation -> (a,b) fn -> unit = fun env fd ->
+    match fd with
+      | Constant _ -> ()
+      | Fun (ty,fd) ->
+	ignore (env (Descr ty));
+	touch env fd
+
+  let eval:
+  type a b. (a,b) fn -> a -> unit = fun fd f ->
+      let sd = Eval.scaffold fd in
+      let tgt = codom fd in
+      tgt.enum <- Eval.eval sd f tgt.enum
 
   let populate =
     let eqs : F.variable -> (F.valuation -> F.property) = fun dty env ->
@@ -273,18 +322,24 @@ struct
       | Descr ty ->
 	begin
 	  let c =  Ty.cardinal ty in
+	  Printf.eprintf "type %s: %i\n%!" ty.ident c;
 	  if ty.size <= c
 	  then 				(* full *)
 	    c
 	  else
 	    begin
 	      (* use the proper constructors *)
-	      List.iter (fun (_,e) ->
+	      List.iter (fun (id,e) ->
 		match e with
 		| Elem (fd,f) ->
+		  (* touch the arguments of the function *)
+		  touch env fd;
+
 		  let ty = codom fd in
-		  let l = eval env fd f in
-		  ignore (Ty.merge ty l)
+		  let c1 = Ty.cardinal ty in
+		  Printf.eprintf "using %s\t%!" id;
+		  eval fd f;
+		  Printf.eprintf "found new elements (%i)\n%!" (Ty.cardinal ty - c1)
 	      ) ty.constructors;
 	      (* use fresh *)
 	      Ty.populate 10 ty;
@@ -300,7 +355,9 @@ struct
   let val_ id fd f : value =
     let tgt = codom fd in
     tgt.constructors <- (id, Elem (fd,f)) :: tgt.constructors;
-    Descr tgt
+    let r = Descr tgt in
+    Printf.eprintf "declared %s\n%!" id;
+    r
 
   (** This is the function that you want to use: take the description of
       a module signature, then use it to generate elements for all the
@@ -308,7 +365,3 @@ struct
 
   let populate (s: value list) = List.iter (fun dty -> ignore (populate dty)) s
 end
-
-
-
-
