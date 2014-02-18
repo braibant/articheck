@@ -248,11 +248,13 @@ struct
     let iter f ht = HT.iter f ht
   end
 
+  type elem_stats = { required : int; produced : int }
+
   module P = struct
-    type property = int
-    let bottom = 0
-    let equal = (=)
-    let is_maximal (_:property) = false
+    type property = elem_stats
+    let bottom = { required = max_int; produced = 0 }
+    let equal p1 p2 = p1.produced = p2.produced
+    let is_maximal p = p.produced >= p.required
   end
 
   module F = Fix.Make(M)(P)
@@ -268,31 +270,21 @@ struct
 	      (PSet.elements ty.enum) >>= fun e -> eval env fd (f e)
 
   let populate =
-    let eqs : F.variable -> (F.valuation -> F.property) = fun dty env ->
-      match dty with
-      | Descr ty ->
-	begin
-	  let c =  Ty.cardinal ty in
-	  if ty.size <= c
-	  then 				(* full *)
-	    c
-	  else
-	    begin
-	      (* use the proper constructors *)
-	      List.iter (fun (_,e) ->
-		match e with
-		| Elem (fd,f) ->
-		  let ty = codom fd in
-		  let l = eval env fd f in
-		  ignore (Ty.merge ty l)
-	      ) ty.constructors;
-	      (* use fresh *)
-	      Ty.populate 10 ty;
-	      Ty.cardinal ty
-	    end
-	end
-    in
-    F.lfp eqs
+    let eqs : F.variable -> (F.valuation -> F.property) =
+      fun (Descr ty) env ->
+	(* use the proper constructors *)
+	List.iter (fun (_,e) ->
+	  match e with
+	    | Elem (fd,f) ->
+	      let ty = codom fd in
+	      let l = eval env fd f in
+	      ignore (Ty.merge ty l)
+	) ty.constructors;
+	(* use fresh *)
+	Ty.populate 10 ty;
+	{ produced = Ty.cardinal ty;
+          required = ty.size }
+    in F.lfp eqs
 
   type value = descr
 
