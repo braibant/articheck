@@ -257,7 +257,7 @@ let rec apply : type a b . (a, b) negative -> a -> b list =
       produce p |> concat_map (fun a -> apply n (v a))
 
 and produce : type a . a positive -> a list = function
-  | Ty ty -> PSet.elements ty.enum
+  | Ty ty -> Ty.elements ty
   | Prod (pa, pb) ->
     cartesian_product (produce pa) (produce pb)
   | Sum (pa, pb) ->
@@ -292,6 +292,19 @@ let counter_example msg pos f =
     None
 
 (* -------------------------------------------------------------------------- *)
+
+let sample li n =
+  let t = Array.of_list li in
+  if Array.length t < n then li
+  else
+    let swap i j =
+      let tmp = t.(i) in
+      t.(i) <- t.(j);
+      t.(j) <- tmp in
+    for i = 0 to n - 1 do
+      swap i (i + Random.int (Array.length t - i))
+    done;
+    Array.to_list (Array.sub t 0 n)
 
 (** {2 Describing signatures of modules that we wish to test } *)
 
@@ -337,13 +350,18 @@ struct
   let populate sig_ =
     let eqs : F.variable -> (F.valuation -> F.property) =
       fun atom env ->
-	(* use the proper constructors *)
-	List.iter (fun (_, Elem (fd, f)) ->
-	  let pos = codom fd in
-          if List.exists (eq_atom atom) (pos_atoms pos) then begin
-            List.iter (fun (Atom ty) -> touch env ty) (neg_atoms fd);
+        (* use the proper constructors *)
+        List.iter (fun (_, Elem (fd, f)) ->
+          let inputs = neg_atoms fd in
+          let head = codom fd in
+          let outputs = pos_atoms head in
+          let max_size =
+            List.fold_left (fun s (Atom ty) -> max s ty.size) 0 outputs in
+          if List.exists (eq_atom atom) outputs then begin
+            List.iter (fun (Atom ty) -> touch env ty) inputs;
 	    let li = apply fd f in
-            List.iter (destruct pos) li
+            let li = sample li max_size in
+            List.iter (destruct head) li;
           end
 	) sig_;
 	(* use fresh *)
