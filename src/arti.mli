@@ -32,7 +32,9 @@ module Ty :
     val merge : 'a ty -> 'a list -> bool
     val declare :
       ?cmp:('a -> 'a -> int) ->
-      ?initial:'a list -> ?fresh:('a PSet.t -> 'a) -> unit -> 'a ty
+      ?initial:'a list ->
+      ?ident:string ->
+      ?fresh:('a PSet.t -> 'a) -> unit -> 'a ty
     val populate : int -> 'a ty -> unit
     val counter_example : string -> 'a ty -> ('a -> bool) -> 'a option
   end

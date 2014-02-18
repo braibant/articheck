@@ -112,6 +112,7 @@ type 'a ty =
     {
       uid: int;
       size: int;
+      ident: string;
       mutable enum: 'a PSet.t;
       fresh: ('a PSet.t -> 'a) option;
       mutable constructors: (ident * 'a elem) list;
@@ -167,6 +168,7 @@ module Ty = struct
   let declare
       ?(cmp=(Pervasives.compare))
       ?(initial=[])
+      ?(ident="<abstract>")
       ?fresh
       ()
       : 'a ty =
@@ -175,7 +177,8 @@ module Ty = struct
       uid = gensym ();
       size = 1000;
       fresh;
-      constructors = []
+      constructors = [];
+      ident
     }
 
   (** This function populates an existing type descriptor who has a
