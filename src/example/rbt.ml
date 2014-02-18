@@ -174,7 +174,7 @@ let ptropt_t : int RBT.pointer option ty = Ty.declare ()
 
 let zip_sig =
   let open RBT in
-  Sig.(rbt_sig @
+  Sig.((* rbt_sig @ *)
 	 [
 	   val_ "Some" (rbt_t @-> returning rbtopt_t)
 	     (fun z -> Some z);

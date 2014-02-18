@@ -106,9 +106,8 @@ type 'a ty =
       size: int;
       mutable enum: 'a PSet.t;
       fresh: ('a PSet.t -> 'a) option;
-      mutable constructors: (ident * 'a elem) list;
     }
-and
+
   (** The GADT [('b, 'a) fn] describes functions of type ['b] whose return type is
       * ['a].
       * - The base case is constant values: they have type ['a] and return ['a].
@@ -117,14 +116,12 @@ and
       *   ['c].
       * We attach to each branch a descriptor of the argument type ['a].
   *)
-  (_,_) fn =
+type (_,_) fn =
   | Constant : 'a ty -> ('a,'a) fn
   | Fun      : 'a ty * ('b, 'c) fn -> ('a -> 'b, 'c) fn
-and
-  'b elem =
-    Elem : ('a,'b) fn * 'a -> 'b elem
-;;
 
+type elem =
+  | Elem : ('a,'b) fn * 'a -> elem
 
 
 (** {2 The core module of our type descriptors } *)
@@ -138,6 +135,8 @@ module Ty = struct
     PSet.mem x s.enum
 
   let cardinal s = PSet.cardinal s.enum
+
+  let equal s1 s2 = s1.uid = s2.uid
 
   let add (x: 'a) (s: 'a ty): unit =
     s.enum <- PSet.insert x s.enum
@@ -167,7 +166,6 @@ module Ty = struct
       uid = gensym ();
       size = 1000;
       fresh;
-      constructors = []
     }
 
   (** This function populates an existing type descriptor who has a
@@ -234,9 +232,9 @@ struct
     module HT = Hashtbl.Make(
       struct
 	type t = descr
-	let uid = function Descr d -> d.uid
+	let uid (Descr ty) = ty.uid
 	let hash = uid
-	let equal t1 t2 = uid t1 = uid t2
+	let equal (Descr ty1) (Descr ty2) = Ty.equal ty1 ty2
       end
       )
     type key = descr
@@ -269,36 +267,36 @@ struct
 	    | Fun (ty,fd) -> touch env ty;
 	      (PSet.elements ty.enum) >>= fun e -> eval env fd (f e)
 
-  let populate =
+  let populate sig_ =
     let eqs : F.variable -> (F.valuation -> F.property) =
       fun (Descr ty) env ->
 	(* use the proper constructors *)
-	List.iter (fun (_,e) ->
-	  match e with
-	    | Elem (fd,f) ->
-	      let ty = codom fd in
-	      let l = eval env fd f in
-	      ignore (Ty.merge ty l)
-	) ty.constructors;
+	List.iter (fun (_, Elem (fd, f)) ->
+	  let ty' = codom fd in
+          if Ty.equal ty ty' then begin
+	    let l = eval env fd f in
+	    ignore (Ty.merge ty' l)
+          end
+	) sig_;
 	(* use fresh *)
 	Ty.populate 10 ty;
 	{ produced = Ty.cardinal ty;
           required = ty.size }
     in F.lfp eqs
 
-  type value = descr
+  type value = string * elem
 
   (** A helper for constructor a signature item. *)
-  let val_ id fd f : value =
-    let tgt = codom fd in
-    tgt.constructors <- (id, Elem (fd,f)) :: tgt.constructors;
-    Descr tgt
+  let val_ id fd f : value = (id, Elem (fd, f))
 
-  (** This is the function that you want to use: take the description of
-      a module signature, then use it to generate elements for all the
-      types in the module. *)
-
-  let populate (s: value list) = List.iter (fun dty -> ignore (populate dty)) s
+  (** This is the function that you want to use: take the description
+      of a module signature, then use it to generate elements for all
+      the types in the module. *)
+  let populate (s: value list) =
+    let pop = populate s in
+    let trigger (_id, Elem (fd, _f)) =
+      ignore (pop (Descr (codom fd))) in
+    List.iter trigger s
 end
 
 
