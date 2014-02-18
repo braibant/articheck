@@ -1,3 +1,7 @@
+type ('a, 'b) sum =
+| L of 'a
+| R of 'b
+
 (** {2 Polymorphic sets, implemented as RBT}  *)
 
 module PSet :
@@ -15,9 +19,11 @@ type ident = string
 (** The definition of a type descriptor for elements of the type ['a]*)
 type 'a ty
 
-type (_, _) fn =
-    Constant : 'a ty -> ('a, 'a) fn
-  | Fun : 'a ty * ('b, 'c) fn -> ('a -> 'b, 'c) fn
+type ('a, 'b) negative
+and 'a positive
+
+type elem
+type atom
 
 (* -------------------------------------------------------------------------- *)
 
@@ -29,7 +35,6 @@ module Ty :
     val cardinal : 'a ty -> int
     val add : 'a -> 'a ty -> unit
     val elements : 'a ty -> 'a list
-    val merge : 'a ty -> 'a list -> bool
     val declare :
       ?cmp:('a -> 'a -> int) ->
       ?initial:'a list -> ?fresh:('a PSet.t -> 'a) -> unit -> 'a ty
@@ -41,12 +46,10 @@ module Ty :
 
 (** {2 Main routines for dealing with our GADT } *)
 
-val ( @-> ) : 'a ty -> ('b, 'c) fn -> ('a -> 'b, 'c) fn
-val returning : 'a ty -> ('a, 'a) fn
-
-(** Recursively find the descriptor that corresponds to the codomain of a
- * function. *)
-val codom : ('a, 'b) fn -> 'b ty
+val returning : 'a ty -> ('a, 'a) negative
+val ( @-> ) : 'a ty -> ('b, 'c) negative -> ('a -> 'b, 'c) negative
+val ( +@ ) : 'a positive -> 'b positive -> ('a, 'b) sum positive
+val ( *@ ) : 'a positive -> 'b positive -> ('a * 'b) positive
 
 (* -------------------------------------------------------------------------- *)
 
@@ -55,7 +58,7 @@ val codom : ('a, 'b) fn -> 'b ty
 module Sig :
   sig
     type value
-    val val_ : ident -> ('a, 'b) fn -> 'a -> value
+    val val_ : ident -> ('a, 'b) negative -> 'a -> value
     val populate : value list -> unit
   end
 
