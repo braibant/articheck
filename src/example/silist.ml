@@ -13,17 +13,18 @@ module SIList = struct
 
 end
 
-(** The description of the type of sorted integer lists. Elements of this type
- * can be compared using the polymorphic, structural comparison operator (=). *)
-let si_t : SIList.t ty = Ty.declare ()
+(** The description of the type of sorted integer lists. Elements of
+ * this type can be compared using the polymorphic, structural
+ * comparison operator (=). *)
+let si_t = atom (Ty.declare () : SIList.t ty)
 
 (** Conversely, [int] is a ground type that can not only be compared with (=),
  * but also admits a generator. *)
-let int_t : int ty = Ty.declare ~fresh:(fun _ -> Random.int 10) ()
-
-(** Populate the descriptor of the built-in type [int]. *)
-let () =
-  Ty.populate 10 int_t
+let int_t =
+  let ty : int ty = Ty.declare ~fresh:(fun _ -> Random.int 10) () in
+  (** Populate the descriptor *)
+  Ty.populate 10 ty;
+  atom ty
 
 (** Use module [Sig] to build a description of the signature of [SIList]. *)
 let silist_sig = Sig.([
@@ -40,5 +41,5 @@ let () =
  * found. *)
 let () =
   let prop s = List.sort Pervasives.compare s = s in
-  assert (Ty.counter_example "sorted lists" si_t prop = None);
+  assert (counter_example "sorted lists" si_t prop = None);
   ()

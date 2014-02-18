@@ -218,43 +218,78 @@ module Ty = struct
       for __ = 0 to n - 1 do
         (add (fresh ty.enum) ty)
       done
-
-  (** Check a property over all the elements of ['a ty] that were
-   * generated up to this point. This function returns [Some x] where [x] is an
-   * element that fails to satisfy the property, and [None] is no such element
-   * exists. *)
-  let counter_example msg ty f =
-    let l = PSet.elements ty.enum in
-    try Some (List.find (fun e -> not (f e)) l)
-    with Not_found ->
-      Printf.eprintf "[%.12s] Passed %i tests without counter-examples\n" msg (List.length l);
-      None
-
-
 end
 
 (* -------------------------------------------------------------------------- *)
 
 (** {2 Main routines for dealing with our GADT } *)
 
-(** Some constructors for our GADT. *)
-
-let returning ty = Ret (Ty ty)
-let (@->) a b = Fun (Ty a,b)
-let (+@) a b = Sum (a, b)
-let ( *@ ) a b = Prod (a, b)
-
 (** Recursively find the positive head of a negative type *)
 let rec codom : type a b. (a,b) negative -> b positive = function
   | Fun (_,fd) -> codom fd
   | Ret ty -> ty
 
-let rec atoms : type a . a positive -> atom list = function
+let rec pos_atoms : type a . a positive -> atom list = function
   | Ty ty -> [Atom ty]
-  | Sum (ta, tb) -> atoms ta @ atoms tb
-  | Prod (ta, tb) -> atoms ta @ atoms tb
+  | Sum (ta, tb) -> pos_atoms ta @ pos_atoms tb
+  | Prod (ta, tb) -> pos_atoms ta @ pos_atoms tb
+
+let rec neg_atoms : type a b . (a, b) negative -> atom list = function
+  | Ret _ -> []
+  | Fun (p, n) -> pos_atoms p @ neg_atoms n
 
 let eq_atom (Atom t1) (Atom t2) = Ty.equal t1 t2
+
+
+(** Now comes the reason for separating positives and negatives in
+    two distinct groups: they are used in very different ways to
+    produce new elements.
+
+    When available, a function of type [a], described as a [(a, b)
+    negative], can be applied to deduce new values of type
+    [b]. This requires producing known values for its (positive)
+    arguments.
+*)
+let rec apply : type a b . (a, b) negative -> a -> b list =
+  fun ty v -> match ty with
+    | Ret _p -> [v]
+    | Fun (p, n) ->
+      produce p |> concat_map (fun a -> apply n (v a))
+
+and produce : type a . a positive -> a list = function
+  | Ty ty -> PSet.elements ty.enum
+  | Prod (pa, pb) ->
+    cartesian_product (produce pa) (produce pb)
+  | Sum (pa, pb) ->
+    let la = List.rev_map (fun v -> L v) (produce pa) in
+    let lb = List.rev_map (fun v -> R v) (produce pb) in
+    List.rev_append la lb
+
+(** A positive datatype can be destructed by pattern-matching to
+    discover new values for the atomic types at its leaves. *)
+let rec destruct : type a . a positive -> a -> unit = function
+  | Ty ty -> begin fun v -> Ty.add v ty end
+  | Prod (ta, tb) ->
+    begin fun (a, b) ->
+      destruct ta a;
+      destruct tb b;
+    end
+  | Sum (ta, tb) ->
+    begin function
+      | L a -> destruct ta a
+      | R b -> destruct tb b
+    end
+
+(** Check a property over all the elements of ['a ty] that were
+ * generated up to this point. This function returns [Some x] where [x] is an
+ * element that fails to satisfy the property, and [None] is no such element
+ * exists. *)
+let counter_example msg pos f =
+  let l = produce pos in
+  try Some (List.find (fun e -> not (f e)) l)
+  with Not_found ->
+    Printf.eprintf "[%.12s] Passed %i tests without counter-examples\n" msg (List.length l);
+    None
 
 (* -------------------------------------------------------------------------- *)
 
@@ -297,51 +332,7 @@ struct
 
   module F = Fix.Make(M)(P)
 
-  let in_env env ty =
-    ignore (env (Atom ty));
-    PSet.elements ty.enum
-
-    (** Now comes the reason for separating positives and negatives in
-        two distinct groups: they are used in very different ways to
-        produce new elements.
-        
-        When available, a function of type [a], described as a [(a, b)
-        negative], can be applied to deduce new values of type
-        [b]. This requires producing known values for its (positive)
-        arguments.
-    *)
-    let rec apply
-    : type a b . F.valuation -> (a, b) negative -> a -> b list =
-      fun env ty v -> match ty with
-        | Ret _p -> [v]
-        | Fun (p, n) ->
-          produce env p |> concat_map (fun a -> apply env n (v a))
-
-    and produce
-    : type a . F.valuation -> a positive -> a list = fun env ->
-      function
-      | Ty ty -> in_env env ty
-      | Prod (pa, pb) ->
-        cartesian_product (produce env pa) (produce env pb)
-      | Sum (pa, pb) ->
-        let la = List.rev_map (fun v -> L v) (produce env pa) in
-        let lb = List.rev_map (fun v -> R v) (produce env pb) in
-        List.rev_append la lb
-
-  (** A positive datatype can be destructed by pattern-matching to
-      discover new values for the atomic types at its leaves. *)
-  let rec destruct : type a . a positive -> a -> unit = function
-    | Ty ty -> begin fun v -> Ty.add v ty end
-    | Prod (ta, tb) ->
-      begin fun (a, b) ->
-        destruct ta a;
-        destruct tb b;
-      end
-    | Sum (ta, tb) ->
-      begin function
-        | L a -> destruct ta a
-        | R b -> destruct tb b
-      end
+  let touch env ty = ignore (env (Atom ty))
 
   let populate sig_ =
     let eqs : F.variable -> (F.valuation -> F.property) =
@@ -349,8 +340,9 @@ struct
 	(* use the proper constructors *)
 	List.iter (fun (_, Elem (fd, f)) ->
 	  let pos = codom fd in
-          if List.exists (eq_atom atom) (atoms pos) then begin
-	    let li = apply env fd f in
+          if List.exists (eq_atom atom) (pos_atoms pos) then begin
+            List.iter (fun (Atom ty) -> touch env ty) (neg_atoms fd);
+	    let li = apply fd f in
             List.iter (destruct pos) li
           end
 	) sig_;
@@ -373,8 +365,14 @@ struct
     let pop = populate s in
     let trigger (_id, Elem (fd, _f)) =
       let popa tom = ignore (pop tom) in
-      List.iter popa (atoms (codom fd)) in
+      List.iter popa (pos_atoms (codom fd)) in
     List.iter trigger s
 end
 
+(** Some constructors for our GADT. *)
 
+let atom ty = Ty ty
+let returning atom = Ret atom
+let (@->) a b = Fun (a,b)
+let (+@) a b = Sum (a, b)
+let ( *@ ) a b = Prod (a, b)

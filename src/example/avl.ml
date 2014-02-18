@@ -129,10 +129,11 @@ module AVL = struct
 
 end
 
-let avl_t : int AVL.t ty = Ty.declare ()
-let int_t : int ty = Ty.declare ~fresh:(fun _ -> Random.int 1000) ()
-let () = Ty.populate 5 int_t
-
+let avl_t = atom(Ty.declare () : int AVL.t ty)
+let int_t =
+  let ty : int ty = Ty.declare ~fresh:(fun _ -> Random.int 1000) () in
+  Ty.populate 5 ty;
+  atom ty
 
 let avl_sig = Sig.([
   val_ "empty" (returning avl_t) AVL.empty;
@@ -144,6 +145,6 @@ let () = Sig.populate  avl_sig
 
 let () =
   let prop s = let s = AVL.elements s in List.sort Pervasives.compare s = s in
-  assert (Ty.counter_example "avl sorted" avl_t prop = None);
-  assert (Ty.counter_example "avl balanced" avl_t AVL.is_balanced = None);
+  assert (counter_example "avl sorted" avl_t prop = None);
+  assert (counter_example "avl balanced" avl_t AVL.is_balanced = None);
   ()

@@ -151,9 +151,11 @@ module RBT : RBT  = struct
       | Some (t, frame) -> Some (t, frame::zip)
 end
 
-let rbt_t : int RBT.t ty = Ty.declare ()
-let int_t : int ty = Ty.declare ~fresh:(fun _ -> Random.int 1000) ()
-let () = Ty.populate 5 int_t
+let rbt_t = atom (Ty.declare () : int RBT.t ty)
+let int_t =
+  let ty : int ty = Ty.declare ~fresh:(fun _ -> Random.int 1000) () in
+  Ty.populate 5 ty;
+  atom ty
 
 let rbt_sig = Sig.([
   val_ "empty" (returning rbt_t) RBT.empty;
@@ -164,13 +166,13 @@ let () = Sig.populate  rbt_sig
 
 let () =
   let prop s = let s = RBT.elements s in List.sort Pervasives.compare s = s in
-  assert (Ty.counter_example "rbt sorted" rbt_t prop = None);
-  assert (Ty.counter_example "rbt balanced" rbt_t RBT.is_balanced = None);
+  assert (counter_example "rbt sorted" rbt_t prop = None);
+  assert (counter_example "rbt balanced" rbt_t RBT.is_balanced = None);
   ()
 
-let dir_t : RBT.direction ty = Ty.declare ~initial:RBT.([Left; Right]) ()
-let rbtopt_t : int RBT.t option ty = Ty.declare ()
-let ptropt_t : int RBT.pointer option ty = Ty.declare ()
+let dir_t = atom (Ty.declare ~initial:RBT.([Left; Right]) () : RBT.direction ty)
+let rbtopt_t = atom (Ty.declare () : int RBT.t option ty)
+let ptropt_t = atom(Ty.declare () : int RBT.pointer option ty)
 
 let zip_sig =
   let open RBT in
@@ -194,4 +196,4 @@ let () =
   let prop = function
     | None -> true
     | Some v -> RBT.is_balanced v in
-  assert (Ty.counter_example "rbt balanced" rbtopt_t prop = None)
+  assert (counter_example "rbt balanced" rbtopt_t prop = None)

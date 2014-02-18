@@ -39,17 +39,22 @@ module Ty :
       ?cmp:('a -> 'a -> int) ->
       ?initial:'a list -> ?fresh:('a PSet.t -> 'a) -> unit -> 'a ty
     val populate : int -> 'a ty -> unit
-    val counter_example : string -> 'a ty -> ('a -> bool) -> 'a option
   end
 
 (* -------------------------------------------------------------------------- *)
 
-(** {2 Main routines for dealing with our GADT } *)
+(** {2 Constructing type representations} *)
 
-val returning : 'a ty -> ('a, 'a) negative
-val ( @-> ) : 'a ty -> ('b, 'c) negative -> ('a -> 'b, 'c) negative
+val atom : 'a ty -> 'a positive
+val returning : 'a positive -> ('a, 'a) negative
+val ( @-> ) : 'a positive -> ('b, 'c) negative -> ('a -> 'b, 'c) negative
 val ( +@ ) : 'a positive -> 'b positive -> ('a, 'b) sum positive
 val ( *@ ) : 'a positive -> 'b positive -> ('a * 'b) positive
+
+
+(** Testing types *)
+val counter_example : string -> 'a positive -> ('a -> bool) -> 'a option
+
 
 (* -------------------------------------------------------------------------- *)
 
