@@ -20,7 +20,7 @@ module type RBT = sig
   (* public type, part of the user interface for the 'move' function *)
   type direction = Left | Right
   type 'a zipper
-  type 'a pointer
+  type 'a pointer (* = 'a t * 'a zipper *)
 
   val zip_open : 'a t -> 'a pointer
   val zip_close : 'a pointer -> 'a t
@@ -170,30 +170,49 @@ let () =
   assert (counter_example "rbt balanced" rbt_t RBT.is_balanced = None);
   ()
 
+(** For now we'll represent [foo option] as [(foo, unit) sum], and
+    manually insert back and forth conversions; medium-term, type
+    descriptions should have a constructor to hide type bijections. *)
+type 'a structural_option = ('a, unit) sum
+
+let of_option = function
+  | Some v -> L v
+  | None -> R ()
+let to_option = function
+  | L v -> Some v
+  | R () -> None
+
+let unit_t = atom (Ty.declare ~initial:[()] () : unit ty)
 let dir_t = atom (Ty.declare ~initial:RBT.([Left; Right]) () : RBT.direction ty)
-let rbtopt_t = atom (Ty.declare () : int RBT.t option ty)
-let ptropt_t = atom(Ty.declare () : int RBT.pointer option ty)
+let ptr_t = atom (Ty.declare () : int RBT.pointer ty)
+
+(* (* if the "pointer" definition was public, one could define *)
+let zip_t = atom (Ty.declare () : int RBT.zipper ty)
+let ptr_t
+    : int RBT.pointer positive = rbt_t *@ zip_t
+   (* this would break well-formedness,
+      as it would allow to replace a subtree at the pointed position
+      by a different subtree of arbitrary size, breaking the black-height invariant *)
+*)
+
+let ptropt_t
+    : int RBT.pointer structural_option positive
+    = ptr_t +@ unit_t
 
 let zip_sig =
   let open RBT in
   Sig.((* rbt_sig @ *)
 	 [
-	   val_ "Some" (rbt_t @-> returning rbtopt_t)
-	     (fun z -> Some z);
-	   val_ "some zip_open" (rbt_t @-> returning ptropt_t)
-	     (fun v -> Some (zip_open v));
-	   val_ "some zip_close" (ptropt_t @-> returning rbtopt_t)
-	     (function None -> None | Some v -> Some (zip_close v));
-	   val_ "move_up" (ptropt_t @-> returning ptropt_t)
-	     (function None -> None | Some v -> move_up v);
-	   val_ "move" (dir_t @-> ptropt_t @-> returning ptropt_t)
-	     (fun dir -> function None -> None | Some v -> move dir v);
+           val_ "zip_open" (rbt_t @-> returning ptr_t) zip_open;
+           val_ "zip_close" (ptr_t @-> returning rbt_t) zip_close;
+
+           val_ "move_up" (ptr_t @-> returning ptropt_t)
+             (fun ptr -> move_up ptr |> of_option);
+           val_ "move" (dir_t @-> ptr_t @-> returning ptropt_t)
+             (fun dir ptr -> move dir ptr |> of_option);
 	 ])
 
 let () = Sig.populate zip_sig
 
 let () =
-  let prop = function
-    | None -> true
-    | Some v -> RBT.is_balanced v in
-  assert (counter_example "rbt balanced" rbtopt_t prop = None)
+  assert (counter_example "rbt balanced" rbt_t RBT.is_balanced = None)
