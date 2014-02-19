@@ -19,11 +19,7 @@ type ident = string
 (** The definition of a type descriptor for elements of the type ['a]*)
 type 'a ty
 
-type ('a, 'b) negative
-and 'a positive
-
-type elem
-type atom
+type ('a, 'b) negative and 'a positive
 
 (* -------------------------------------------------------------------------- *)
 
