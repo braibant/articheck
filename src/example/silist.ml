@@ -1,6 +1,6 @@
- open Arti
+open Arti
 
- module SIList = struct
+module SIList = struct
   type t = int list
 
   let empty = []

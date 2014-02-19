@@ -1,0 +1,35 @@
+\section{An example}
+
+Consider the following signature, which describes the type of \emph{sorted}
+integer lists.
+%
+\begin{ocamlcode}
+module type SIList = sig
+  type t
+
+  val empty: t
+  val add: t -> int -> t
+  val invar: t -> bool
+end
+\end{ocamlcode}
+%
+The \code{invar} function dynamically checks that an element of type \code{t}
+maintains the internal invariant. The module admits a straightforward
+implementation, as follows.
+%
+\begin{ocamlcode}
+module SIList = struct
+  type t = int list
+
+  let empty = []
+
+  let rec add x = function
+    | [] -> [x]
+    | t::q -> if t<x then t::add x q else x::t::q
+
+  let rec invar = function
+    | [] -> true
+    | [_] -> true
+    | t1::(t2::_ as q) -> t1 <= t2 && invar q
+end
+\end{ocamlcode}

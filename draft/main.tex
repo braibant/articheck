@@ -2,6 +2,10 @@
 
 \usepackage[T1]{fontenc}
 \usepackage[utf8x]{inputenc}
+\usepackage{minted}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newminted{ocaml}{}
 
 \begin{document}
 
@@ -70,6 +74,8 @@ quickcheck
 }
 
 \input{introduction}
+\input{anexample}
+\input{representing}
 \input{body}
 
 \bibliographystyle{plain}

@@ -1,0 +1,21 @@
+% TODO: the transition from the introduction is a little bit dry, we probably
+% need a few more paragraphs before that part.
+
+\section{Describing a type}
+
+In the context of our testing framework, we wish to describe a type using a set
+of \emph{instances}, that is, of inhabitants of the type. The following data
+structure makes up what we call a \emph{type descriptor}.
+
+\begin{ocamlcode}
+type 'a ty = {
+  (* other implementation details omitted *)
+  mutable enum: 'a PSet.t;
+  fresh: ('a PSet.t -> 'a) option;
+}
+\end{ocamlcode}
+
+Type descriptors record a persistent set of instances via the \code{enum}
+field. Descriptors for ground types, such as \code{int}, are equipped with a
+generator of \code{fresh} instances that are guaranteed to be different from the
+others.
