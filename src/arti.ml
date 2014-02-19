@@ -348,19 +348,6 @@ let counter_example msg pos f =
 
 (* -------------------------------------------------------------------------- *)
 
-(* let sample li n = *)
-(*   let t = Array.of_list li in *)
-(*   if Array.length t < n then li *)
-(*   else *)
-(*     let swap i j = *)
-(*       let tmp = t.(i) in *)
-(*       t.(i) <- t.(j); *)
-(*       t.(j) <- tmp in *)
-(*     for i = 0 to n - 1 do *)
-(*       swap i (i + Random.int (Array.length t - i)) *)
-(*     done; *)
-(*     Array.to_list (Array.sub t 0 n) *)
-
 (** {2 Describing signatures of modules that we wish to test } *)
 
 module Sig :
@@ -410,14 +397,9 @@ struct
           let inputs = neg_atoms fd in
           let head = codom fd in
           let outputs = pos_atoms head in
-          (* let max_size = *)
-          (*   List.fold_left (fun s (Atom ty) -> max s ty.size) 0 outputs in *)
           if List.exists (eq_atom atom) outputs then begin
             List.iter (fun (Atom ty) -> touch env ty) inputs;
 	    Eval.main fd f
-	    (* let li = apply fd f in *)
-            (* let li = sample li max_size in *)
-            (* List.iter (destruct head) li; *)
           end
 	) sig_;
 	(* use fresh *)
