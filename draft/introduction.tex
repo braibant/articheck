@@ -1,5 +1,7 @@
 \section{Introduction}
 
+\newcommand{qcheck}{QuickCheck{}}
+
 Software development is hard. Industry practices still rely, for the better
 part, on tests to ensure the functional correctness of programs. Even in more
 sophisticated circles, such as the programming language research community, not
@@ -8,19 +10,20 @@ cornerstone of the development cycle. Moreover, even if the end goal is to fully
 certify a program using a proof assistant, it is still worthwhile to eliminate
 bugs early by running a cheap, efficient test framework.
 
-Quickcheck is a popular, efficient tool for that purpose. Users write predicates
+\qcheck{} is a popular, efficient tool for that purpose. Users write predicates
 for the correctness of their elements, such as ``applying reverse twice yields
-the same list''. Using type classes, the quickcheck framework is then able to
+the same list''. Using type classes, the \qcheck framework is then able to
 create \emph{instances} of the type being tested, which are then tested against
 the predicate. Any counter-examples are reported to the user.
 
-Our novel approach is motivated by some limitations of the quickcheck framework.
-When users create trees, for instance, not only do they have to specify that
-leaves should be generated more often than nodes (for otherwise the tree
-generation would not terminate), but they also have to rely on a global size
-measure to stop generating new nodes after a while. It is thus up to the user of
-the library to implement their own logic for generating the right instances,
-within a reasonable size limit, combining the various base cases.
+Our novel approach is motivated by some limitations of the \qcheck
+framework.  When users create trees, for instance, not only do they
+have to specify that leaves should be generated more often than nodes
+(for otherwise the tree generation would not terminate), but they also
+have to rely on a global size measure to stop generating new nodes
+after a while. It is thus up to the user of the library to implement
+their own logic for generating the right instances, within a
+reasonable size limit, combining the various base cases.
 
 We argue that these low-level manipulations should be taken care of by the
 library. When generating binary search tree instances, one ends up
@@ -32,6 +35,6 @@ exports a correctness predicate, all the testing library needs is functions
 that \emph{return} $t$'s.
 
 In the present document, we describe a library that does precisely that, dubbed
-``articheck''. The library is written in OCaml. While quickcheck uses a
+``articheck''. The library is written in OCaml. While \qcheck uses a
 combination internal testing and type classes, our library performs external
 testing and relies on GADTs.
