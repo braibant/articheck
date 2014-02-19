@@ -51,6 +51,12 @@ val ( @-> ) : 'a positive -> ('b, 'c) negative -> ('a -> 'b, 'c) negative
 val ( +@ ) : 'a positive -> 'b positive -> ('a, 'b) sum positive
 val ( *@ ) : 'a positive -> 'b positive -> ('a * 'b) positive
 
+type ('a, 'b) bijection = ('a -> 'b) * ('b -> 'a)
+val bij : 'a positive -> ('a, 'b) bijection -> 'b positive
+
+(** derived type representations *)
+val unit : unit positive
+val option : 'a positive -> 'a option positive
 
 (** Testing types *)
 val counter_example : string -> 'a positive -> ('a -> bool) -> 'a option

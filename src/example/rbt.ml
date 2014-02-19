@@ -170,18 +170,6 @@ let () =
   assert (counter_example "rbt balanced" rbt_t RBT.is_balanced = None);
   ()
 
-(** For now we'll represent [foo option] as [(foo, unit) sum], and
-    manually insert back and forth conversions; medium-term, type
-    descriptions should have a constructor to hide type bijections. *)
-type 'a structural_option = ('a, unit) sum
-
-let of_option = function
-  | Some v -> L v
-  | None -> R ()
-let to_option = function
-  | L v -> Some v
-  | R () -> None
-
 let unit_t = atom (Ty.declare ~initial:[()] () : unit ty)
 let dir_t = atom (Ty.declare ~initial:RBT.([Left; Right]) () : RBT.direction ty)
 let ptr_t = atom (Ty.declare () : int RBT.pointer ty)
@@ -195,9 +183,7 @@ let ptr_t
       by a different subtree of arbitrary size, breaking the black-height invariant *)
 *)
 
-let ptropt_t
-    : int RBT.pointer structural_option positive
-    = ptr_t +@ unit_t
+let ptropt_t = option ptr_t
 
 let zip_sig =
   let open RBT in
@@ -206,10 +192,8 @@ let zip_sig =
            val_ "zip_open" (rbt_t @-> returning ptr_t) zip_open;
            val_ "zip_close" (ptr_t @-> returning rbt_t) zip_close;
 
-           val_ "move_up" (ptr_t @-> returning ptropt_t)
-             (fun ptr -> move_up ptr |> of_option);
-           val_ "move" (dir_t @-> ptr_t @-> returning ptropt_t)
-             (fun dir ptr -> move dir ptr |> of_option);
+           val_ "move_up" (ptr_t @-> returning ptropt_t) move_up;
+           val_ "move" (dir_t @-> ptr_t @-> returning ptropt_t) move;
 	 ])
 
 let () = Sig.populate zip_sig

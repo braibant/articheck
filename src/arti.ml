@@ -124,6 +124,7 @@ type 'a ty =
       fresh: ('a PSet.t -> 'a) option;
     }
 
+type ('a, 'b) bijection = ('a -> 'b) * ('b -> 'a)
 
 (** The GADT [('ty, 'head) negative] describes currified functions of
  * type ['ty] whose return datatype is a positive type ['head]. The
@@ -160,6 +161,7 @@ and _ positive =
 | Ty : 'a ty -> 'a positive
 | Sum : 'a positive * 'b positive -> ('a, 'b) sum positive
 | Prod : 'a positive  * 'b positive -> ('a * 'b) positive
+| Bij : 'a positive * ('a, 'b) bijection -> 'b positive
 
 type elem = Elem : ('a,'b) negative * 'a -> elem
 type atom = Atom : 'a ty -> atom
@@ -233,6 +235,7 @@ let rec pos_atoms : type a . a positive -> atom list = function
   | Ty ty -> [Atom ty]
   | Sum (ta, tb) -> pos_atoms ta @ pos_atoms tb
   | Prod (ta, tb) -> pos_atoms ta @ pos_atoms tb
+  | Bij (t, _bij) -> pos_atoms t
 
 let rec neg_atoms : type a b . (a, b) negative -> atom list = function
   | Ret _ -> []
@@ -258,6 +261,7 @@ let rec apply : type a b . (a, b) negative -> a -> b list =
 
 and produce : type a . a positive -> a list = function
   | Ty ty -> Ty.elements ty
+  | Bij (t, bij) -> List.map (fst bij) (produce t)
   | Prod (pa, pb) ->
     cartesian_product (produce pa) (produce pb)
   | Sum (pa, pb) ->
@@ -269,6 +273,7 @@ and produce : type a . a positive -> a list = function
     discover new values for the atomic types at its leaves. *)
 let rec destruct : type a . a positive -> a -> unit = function
   | Ty ty -> begin fun v -> Ty.add v ty end
+  | Bij (t, bij) -> begin fun a -> destruct t (snd bij a) end
   | Prod (ta, tb) ->
     begin fun (a, b) ->
       destruct ta a;
@@ -394,3 +399,24 @@ let returning atom = Ret atom
 let (@->) a b = Fun (a,b)
 let (+@) a b = Sum (a, b)
 let ( *@ ) a b = Prod (a, b)
+let bij t f = Bij (t, f)
+
+(** Derived representation constructors *)
+
+(** For now we'll represent [foo option] as [(foo, unit) sum], and
+    manually insert back and forth conversions; medium-term, type
+    descriptions should have a constructor to hide type bijections. *)
+type 'a structural_option = ('a, unit) sum
+
+let of_option = function
+  | Some v -> L v
+  | None -> R ()
+let to_option = function
+  | L v -> Some v
+  | R () -> None
+
+let option_bij : ('a structural_option, 'a option) bijection =
+  (to_option, of_option)
+
+let unit = atom (Ty.declare ~initial:[()] () : unit ty)
+let option p = bij (p +@ unit) option_bij
