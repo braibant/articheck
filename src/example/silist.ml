@@ -9,8 +9,10 @@
     | [] -> [x]
     | t::q -> if t < x then t :: add x q else x::t::q
 
-  (* let pp l = Printf.sprintf "[%s]" (String.concat ";" (List.map string_of_int l)) *)
-
+  let rec invar = function
+    | [] -> true
+    | [_] -> true
+    | t1::(t2::_ as q) -> t1 <= t2 && invar q
 end
 
 (** The description of the type of sorted integer lists. Elements of
@@ -40,6 +42,5 @@ let () =
  * define a predicate for that purpose and assert that no counter-example can be
  * found. *)
 let () =
-  let prop s = List.sort Pervasives.compare s = s in
-  assert (counter_example "sorted lists" si_t prop = None);
+  assert (counter_example "sorted lists" si_t SIList.invar = None);
   ()
