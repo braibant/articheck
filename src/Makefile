@@ -1,5 +1,6 @@
 .PHONY all:
-	ocamlbuild -use-ocamlfind -I example silist.native rbt.native avl.native bdd.native
+	ocamlbuild -use-ocamlfind -I example \
+	silist.native rbt.native avl.native bdd.native zdd.native
 
 # arti: arti.ml
 # 	ocamlfind ocamlopt -g -annot -bin-annot -w @1..3@8..12@14..21@23..40-41@43 $< -o $@

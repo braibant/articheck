@@ -60,12 +60,12 @@ end = struct
   let table = WHT.create 1337
   let counter = ref 2
 
-  let rec pp = function
-    | One -> "1"
-    | Zero -> "0"
-    | Node (v,l,h,id) -> Printf.sprintf "(%i ? %s : %s)@[%i]" v (pp l) (pp h) id
+  (* let rec pp = function *)
+  (*   | One -> "1" *)
+  (*   | Zero -> "0" *)
+  (*   | Node (v,l,h,id) -> Printf.sprintf "(%i ? %s : %s)@[%i]" v (pp l) (pp h) id *)
 
-  let _ = ignore (pp)
+  (* let _ = ignore (pp) *)
 
   (* all nodes must be constructed using this function, which will enforce the maximal sharing property *)
   let mk_node v ~low ~high =
@@ -189,9 +189,12 @@ end
 
 open Arti
 
-let bdd_t : BDD.t ty = Ty.declare ~cmp:(BDD.compare) ~ident:"bdd" ()
-let var_t : int ty   = Ty.declare ~ident:"var" ~fresh:(fun _ -> Random.int 10) ()
-let () = Ty.populate 10 var_t
+let bdd_t = atom (Ty.declare ~cmp:(BDD.compare) ~ident:"bdd" () : BDD.t ty)
+let var_t =
+  let ty = Ty.declare ~ident:"var" ~fresh:(fun _ -> Random.int 10) () in
+  let () = Ty.populate 10 ty in
+  atom ty
+
 
 let bdd_sig = Sig.([
   val_ "zero" (returning bdd_t) BDD.zero;
@@ -208,4 +211,4 @@ let () =
   Sig.populate bdd_sig;
   Printf.eprintf "populated sig\n%!"
 
-let () = assert (Ty.counter_example "bdd reduced-ordered" bdd_t BDD.robdd = None)
+let () = assert (counter_example "bdd reduced-ordered" bdd_t BDD.robdd = None)
