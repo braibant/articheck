@@ -49,7 +49,7 @@
   widely-used component of the software development cycle. Various flavors of
   testing exist: popular ones include \emph{unit testing}, which consists in
   manually crafting test cases for specific parts of the code base, as well as
-  quickcheck-style testing, where instances of a type are automatically
+  \emph{quickcheck-style} testing, where instances of a type are automatically
   generated to serve as test inputs.
 
   These classical methods of testing can be thought of as \emph{internal}
@@ -57,9 +57,8 @@
   module should be checked. We propose a new method of \emph{external} testing
   where test code checks an \emph{abstract} data structure. Our new testing
   method takes a description of a \emph{module signature}, then builds sequences
-  of function calls that generate elements of the abstract type just like any other
-  client code. Our testing framework thus builds elements that respect the
-  invariants hidden by the module signature.
+  of function calls that generate elements of the abstract type just like any
+  other client code. Counter-examples, if any, are then presented to the user.
 \end{abstract}
 
 \category{CR-number}{subcategory}{third-level}
@@ -69,6 +68,8 @@ functional programming,
 testing,
 quickcheck
 }
+
+\input{introduction}
 
 \bibliographystyle{plain}
 \hbadness=10000
