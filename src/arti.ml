@@ -119,6 +119,7 @@ type 'a ty =
       fresh: ('a PSet.t -> 'a) option;
     }
 
+type ('a, 'b) bijection = ('a -> 'b) * ('b -> 'a)
 
 (** The GADT [('ty, 'head) negative] describes currified functions of
  * type ['ty] whose return datatype is a positive type ['head]. The
@@ -155,6 +156,7 @@ and _ positive =
 | Ty : 'a ty -> 'a positive
 | Sum : 'a positive * 'b positive -> ('a, 'b) sum positive
 | Prod : 'a positive  * 'b positive -> ('a * 'b) positive
+| Bij : 'a positive * ('a, 'b) bijection -> 'b positive
 
 type elem = Elem : ('a,'b) negative * 'a -> elem
 type atom = Atom : 'a ty -> atom
@@ -224,6 +226,7 @@ let rec pos_atoms : type a . a positive -> atom list = function
   | Ty ty -> [Atom ty]
   | Sum (ta, tb) -> pos_atoms ta @ pos_atoms tb
   | Prod (ta, tb) -> pos_atoms ta @ pos_atoms tb
+  | Bij (t, _bij) -> pos_atoms t
 
 let rec neg_atoms : type a b . (a, b) negative -> atom list = function
   | Ret _ -> []
@@ -235,6 +238,7 @@ module Eval = struct
 
   type _ set =
     | Set   : 'a PSet.t -> 'a set
+    | Bij   : 'a set * ('a, 'b) bijection -> 'b set
     | Union   : 'a set * 'b set -> ('a,'b) sum set
     | Product : 'a set * 'b set -> ('a * 'b) set
 
@@ -245,6 +249,8 @@ module Eval = struct
       | Union (pa,pb) ->
 	iter (fun a -> f (L a)) pa;
 	iter (fun b -> f (R b)) pb;
+      | Bij (ps, bij) ->
+        iter (fun a -> f (fst bij a)) ps
       | Product (pa,pb) ->
 	iter (fun a -> iter (fun b -> f (a,b)) pb) pa
     end
@@ -290,6 +296,8 @@ module Eval = struct
       function
 	| Ty ty ->
 	  Set (ty.enum)
+        | Bij (p, bij) ->
+          Bij (produce p, bij)
 	| Prod (pa,pb) ->
 	  Product (produce pa, produce pb)
 	| Sum (pa, pb) ->
@@ -300,6 +308,7 @@ module Eval = struct
   let rec destruct:
   type a . a positive -> a -> unit = function
     | Ty ty -> begin fun v -> Ty.add v ty end
+    | Bij (t, bij) -> begin fun v -> destruct t (snd bij v) end
     | Prod (ta, tb) ->
       begin fun (a, b) ->
         destruct ta a;
@@ -433,3 +442,24 @@ let returning atom = Ret atom
 let (@->) a b = Fun (a,b)
 let (+@) a b = Sum (a, b)
 let ( *@ ) a b = Prod (a, b)
+let bij t f = Bij (t, f)
+
+(** Derived representation constructors *)
+
+(** For now we'll represent [foo option] as [(foo, unit) sum], and
+    manually insert back and forth conversions; medium-term, type
+    descriptions should have a constructor to hide type bijections. *)
+type 'a structural_option = ('a, unit) sum
+
+let of_option = function
+  | Some v -> L v
+  | None -> R ()
+let to_option = function
+  | L v -> Some v
+  | R () -> None
+
+let option_bij : ('a structural_option, 'a option) bijection =
+  (to_option, of_option)
+
+let unit = atom (Ty.declare ~initial:[()] () : unit ty)
+let option p = bij (p +@ unit) option_bij
