@@ -16,7 +16,7 @@ to construct.
 The point of view adopted in this section is intentedly simplistic. The design,
 as presented here, contains several obvious shortcomings. It allows,
 nonetheless, for a high-level overview of our principles, and paves the way for
-a more thorough discussion of our design which appears in the subsequent section
+a more thorough discussion of our design which appears in
 \sref{sec:representation}.
 
 Here is the signature for our module of sorted integer lists.
@@ -54,7 +54,10 @@ end
 Roughly speaking, our goal is to generate, as if we were \emph{client code} of
 the module, instances of type \code{t} using only the functions exported by the
 module. Therefore, one of our first requirements is a data structure for keeping
-track of the \code{t}'s created so far.
+track of the \code{t}'s created so far. We also need to keep track of the
+integers we have generated so far, since they are necessary to call the
+\code{add} function: \arti will thus manipulate several \code{ty}'s for all the
+types it handles.
 %
 \begin{ocamlcode}
 type 'a ty = {

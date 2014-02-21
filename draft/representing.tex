@@ -1,22 +1,136 @@
 % TODO: the transition from the introduction is a little bit dry, we probably
 % need a few more paragraphs before that part.
 
-\section{Describing a type}
+\section{Implementing \arti}
 \label{sec:representation}
 
-In the context of our testing framework, we wish to describe a type using a set
-of \emph{instances}, that is, of inhabitants of the type. The following data
-structure makes up what we call a \emph{type descriptor}.
+The simplistic design we introduced in \sref{sec:essence} conveys the main ideas
+behind \arti, yet fails to address a wide variety of cases. The present section
+reviews the issues with the current design and incrementally addresses them.
 
+\subsection{A better algebra of types}
+\label{sec:algebra}
+
+The simply-typed lambda calculus that we introduced only contains constants and
+functions. While one can theoretically encode sums and products using functions,
+it seems reasonable to have a built-in notion of sums and products in our
+language.
+
+One of the authors naïvely suggested that the data type be extended with cases
+for products and sums, such as:
+%
 \begin{ocamlcode}
-type 'a ty = {
-  (* other implementation details omitted *)
-  mutable enum: 'a PSet.t;
-  fresh: ('a PSet.t -> 'a) option;
-}
+| Prod: ('a,'c) fn * ('b,'c) fn -> ('a * 'b,'c) fn
 \end{ocamlcode}
+%
+It turns out that the branch above does not describe products. If \code{'a} is
+\code{int -> int} and \code{'b} is \code{int -> float}, not only do the
+\code{'c} parameters fail to match, but the \code{'a * 'b} parameter in the
+conclusion represents a pair of functions, rather than a function that returns a
+pair! Another snag is that the type of \code{eval} makes no sense in the case of
+a product. If the first parameter of type \code{('a, 'b) fn} represents a way to
+obtain a \code{'b} from the product type \code{'a}, then what use is the second
+parameter of \code{eval}?
 
-Type descriptors record a persistent set of instances via the \code{enum}
-field. Descriptors for ground types, such as \code{int}, are equipped with a
-generator of \code{fresh} instances that are guaranteed to be different from the
-others.
+In light of these limitations, we take inspiration from the literature on
+focusing and break the \code{fn} type into two distinct GADTs.
+\begin{itemize}
+  \item The GADT \code{('a, 'b) negative} (\code{neg} for short) represents a
+    \emph{computation} of type \code{'a} that produces a result of type
+    \code{'b}.
+  \item The GADT \code{'a positive} (\code{pos} for short) represents a
+    \emph{value}, that is, the result of a computation.
+\end{itemize}
+%
+\begin{ocamlcode}
+type (_, _) neg =
+| Fun : 'a pos * ('b, 'c) neg -> ('a -> 'b, 'c) neg
+| Ret : 'a pos -> ('a, 'a) neg
+
+and _ pos =
+| Ty : 'a ty -> 'a pos
+| Sum : 'a pos * 'b pos -> ('a, 'b) sum pos
+| Prod : 'a pos  * 'b pos -> ('a * 'b) pos
+| Bij : 'a pos * ('a, 'b) bijection -> 'b pos
+
+and ('a, 'b) sum =
+| L of 'a
+| R of 'b
+\end{ocamlcode}
+%
+The \code{pos} type represents first-order data types: products, sums and atomic
+types, that is, whatever is on the rightmost side of an arrow. We provide an
+injection from positive to negative types: a value of type \code{'a} is also a
+constant computation.
+
+We do \emph{not} provide an injection from negative types to positive types:
+this would allow nested arrows, that is, higher-order types.  One can take the
+example of the \code{map} function, which has type \code{('a -> 'b) -> 'a list
+-> 'b list}: we explicitly disallow representing the \code{'a -> 'b} part as a
+\code{Fun} constructor, as it would require us to synthesize instances of a
+function type. Rather, we ask the user to represent \code{'a -> 'b} as a
+\code{Ty} constructor; in other words, we ask the user to supply their own test
+functions as if they were a built-in type.
+
+Since our GADT does not accurately model tagged, n-ary sums of OCaml, we provide
+a last \code{Bij} case that allows the user to provide a two-way mapping between
+a built-in type (say, \code{'a option}) and its \arti representation (\code{() +
+'a}). That way, \arti can work with regular OCaml data types by converting them
+back-and-forth.
+
+This change of representation incurs some changes on our evaluation functions
+as well. The \code{eval} function is split into several parts, which we detail
+right below.
+%
+\begin{ocamlcode}
+let rec apply: type a b. (a, b) neg -> a -> b list =
+  fun ty v -> match ty with
+  | Fun (p, n) ->
+      produce p |> concat_map (fun a -> apply n (v a))
+  ...
+and produce: type a. a pos -> a list =
+  fun ty -> match ty with
+  | Ty ty -> Ty.elements ty
+  | Prod (pa, pb) ->
+      cartesian_product (produce pa) (produce pb)
+  ...
+let rec destruct: type a. a pos -> a -> unit =
+  function
+  | Ty ty -> (fun v ->
+      remember v ty)
+  | Prod (ta, tb) -> (fun (a, b) ->
+      destruct ta a;
+      destruct tb b)
+  ...
+\end{ocamlcode}
+%
+Let us first turn to the case of \emph{values}. In order to understand what \arti
+ought to do, one may ask themselves what the user can do with values. The user
+may destruct them: given a pair of type \code{'a * 'b}, the user may keep just
+the first element, thus obtaining a new \code{'a}. The same goes for sums. We
+thus provide a \code{destruct} function, which breaks down positives types by
+pattern-matching, populating the descriptions of the various types it encounters
+as it goes.
+
+Keeping this in mind, we must realize that if we can use a positive type
+\code{'a} to obtain a \code{'b} (\code{apply}), the user may use any possible
+means to produce an \code{'a}: if \code{'a} is a product, they will use every
+possible combination of elements that are available to them; if \code{'a} is a
+sum, they will either every choice from the type of either. We must therefore
+devise a function \code{produce} that represents the entire set of possible
+choices for a positive type.
+
+The \code{apply} function, just like before, takes a \emph{computation} along
+with a matching description, and generates a set of \code{b}. However, it now
+relies on \code{product} to exhibit all possible instances of a type before
+passing these instances on to the actual function.
+
+We are now able to accurately model a calculus rich enough to test realistic
+signatures involving records, option types, and various ways to create
+functions.
+
+\subsection{Efficient representation of a set of instances}
+\label{sec:efficient}
+
+At this stage, the set of features \arti offers is relatively satisfactory;
+severe performance problems remain, however.
