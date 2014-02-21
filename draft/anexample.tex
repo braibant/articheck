@@ -1,7 +1,16 @@
-\section{An example}
+\section{The essence of external testing}
+\label{sec:essence}
 
-Consider the following signature, which describes the type of \emph{sorted}
-integer lists.
+In the following section, we illustrate the core principles of external testing
+by taking a small example. Reasoning on that small example, we try to design
+a very basic library that performs external testing. The library has several
+shortcomings and fails to address several salient points, but illustrates well
+our purpose. Properly designing such a library is the topic of
+\sref{sec:representation}.
+
+Our running example in this section is the trivial module which exports an
+abstract type \code{t} enforcing the invariant that elements of type \code{t}
+describe sorted integer lists.
 %
 \begin{ocamlcode}
 module type SIList = sig
@@ -9,12 +18,12 @@ module type SIList = sig
 
   val empty: t
   val add: t -> int -> t
-  val invar: t -> bool
+  val check: t -> bool
 end
 \end{ocamlcode}
 %
-The \code{invar} function dynamically checks that an element of type \code{t}
-maintains the internal invariant. The module admits a straightforward
+The \code{check} function dynamically checks that an element of type \code{t}
+satisfies the internal invariant. The module admits a straightforward
 implementation, as follows.
 %
 \begin{ocamlcode}
@@ -27,9 +36,128 @@ module SIList = struct
     | [] -> [x]
     | t::q -> if t<x then t::add x q else x::t::q
 
-  let rec invar = function
-    | [] -> true
-    | [_] -> true
-    | t1::(t2::_ as q) -> t1 <= t2 && invar q
+  let rec check = function
+    | [] | [_] -> true
+    | t1::(t2::_ as q) -> t1 <= t2 && check q
 end
 \end{ocamlcode}
+%
+In order to keep track of the set of \code{t}'s we have built so far, we need
+what we call a \emph{type descriptor} for \code{t}.
+%
+\begin{ocamlcode}
+type 'a ty = {
+  (* other implementation details omitted *)
+  mutable enum: 'a list;
+  fresh: ('a list -> 'a) option;
+}
+\end{ocamlcode}
+%
+A type descriptor \code{'a ty} keeps track of all the \emph{instances} we have
+created so far via its \code{enum} field. In the case of built-in types or,
+phrased differently, types that are \emph{external} to the library, there is no
+point in constructing them manually. For types such as \code{int}, we therefore
+provide a \code{fresh} function that generates a fresh integer different from
+all we have generated so far.
+
+The goal of \arti is to play the role of the client code. In hindsight, \arti
+behaves like a robot that imitates a client of the library. Things that the
+client are allowed to do with the above signature are: manipulating the
+\code{empty} element and calling \code{add} to generate new elements of type
+\code{t}. We want \arti to figure this out and generate sequences of calls to
+\code{add}.
+
+In essence, we want to represent well-typed applications in the
+simply-typed lambda-calculus. This can be embedded in OCaml using GADTs. We
+define the GADT \code{('f, 'r) fn}. The type describes ways of producing
+instances of type \code{'r} using a function of type \code{'f}. We call it a
+\emph{function descriptor}.
+%
+\begin{ocamlcode}
+type (_,_) fn =
+| Ret: 'a ty -> ('a,'a) fn
+| Fun: 'a ty * ('b, 'c) fn -> ('a -> 'b, 'c) fn
+
+(* Helpers for creating [fn]'s. *)
+let (@->) ty fd = Fun (ty,fd)
+let returning ty = Constant ty
+\end{ocamlcode}
+%
+The \code{Ret} case describes a constant value, which has type \code{'a} and
+produce one instance of type \code{'a}. For reasons that will soon become
+apparent, we also record the descriptor of type \code{'a}. \code{Fun} describes
+the case of a function from \code{'a} to \code{'b}: using the descriptor of type
+\code{'a}, we can apply the function to obtain instances of type \code{'b};
+combining that with the other \code{('b, 'c) fn} gives us a way to produce
+elements of type \code{'c}, hence then \code{('a -> 'b, 'c) fn} conclusion.
+%
+\begin{ocamlcode}
+let (>>=) li f = List.flatten (List.map f li)
+
+let rec eval : type a b. (a,b) fn -> a -> b list =
+  fun fd f ->
+    match fd with
+    | Ret _ -> [f]
+    | Fun (ty,fd) ->
+        ty.enum >>= fun e -> eval fd (f e)
+
+let rec codom : type a b. (a,b) fn -> b ty =
+  function
+    | Fun (_,fd) -> codom fd
+    | Ret ty -> ty
+\end{ocamlcode}
+%
+The \code{eval} function is central: taking a function descriptor \code{fd}, it
+recurses over it, thus refining the type of its argument \code{f}. The use of
+GADTs allows us to statically prove that the \code{eval} function only ever
+produces instances of type \code{b}.
+%
+The \code{codom} function allows one to find the type
+descriptor associated to the return value (the codomain) of an \code{fn}.
+
+Using the two functions above, it then becomes trivial to generate new instances
+of \code{'b}.
+%
+\begin{ocamlcode}
+let use (fd: ('a, 'b) fn) (f: 'a) =
+  let prod = eval fd f in
+  let ty = codom fd in
+  List.iter (fun x -> 
+    if mem x ty then () else ty.enum <- x::ty.enum
+  ) prod
+\end{ocamlcode}
+%
+The function takes a function descriptor along with a matching function. The
+\code{prod} variable contains all the instances of \code{'b} we just managed to
+create; \code{ty} is the descriptor of \code{'b}. We store the new
+instances of \code{'b} in the corresponding type descriptor.
+
+In order to wrap this up nicely, one can define \emph{signature descriptors}. An
+entry in a signature descriptor is merely a function that produces a certain
+type \code{'a} along with its corresponding function descriptor. Once this is
+done, the user can finally call our library and test the functions found in the
+signature description.
+%
+\begin{ocamlcode}
+type sig_elem = Elem : ('a,'b) fn * 'a -> elem
+type sig_descr = (string * sig_elem) list
+let si_t  =
+  (* create a descriptor for [SIList.t]... *)
+let int_t =
+  (* ...and one for [int], with a [fresh] function *)
+
+let sig_of_silist = [
+  ("empty", (returning si_t, SIList.empty));
+  ("add", (int_t @-> si_t @-> returning si_t, SIList.add));
+]
+
+let _ =
+  Arti.check sig_of_silist SIList.check
+\end{ocamlcode}
+%
+The \code{Arti.check} function repeatedly calls \code{use} on the items found in
+the signature, until the desired number of instances have been created. We call
+\code{use} for each function in the signature several times: failing that, the only
+applications we could ever build would be of the form \code{add empty n}. We
+then obtain the descriptor for \code{SIList.t} and check that each instance
+satisfies the \code{SIList.check} predicate.
