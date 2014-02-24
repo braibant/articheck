@@ -42,6 +42,7 @@ focusing and break the \code{fn} type into two distinct GADTs.
     \emph{value}, that is, the result of a computation.
 \end{itemize}
 %
+% 3a9c140
 \begin{ocamlcode}
 type (_, _) neg =
 | Fun : 'a pos * ('b, 'c) neg -> ('a -> 'b, 'c) neg
@@ -102,6 +103,13 @@ let rec destruct: type a. a pos -> a -> unit =
       destruct ta a;
       destruct tb b)
   ...
+
+(* Putting it all together *)
+let _ =
+  ...
+  let li = apply fd f in
+  List.iter (destruct head) li;
+  ...
 \end{ocamlcode}
 %
 Let us first turn to the case of \emph{values}. In order to understand what \arti
@@ -135,7 +143,7 @@ functions.
 At this stage, the set of features \arti offers is relatively satisfactory;
 severe performance problems remain, however. Take the case of a module that
 exports logical formulas, for instance. With only three combinators and twenty
-constants, a first pass would generate 1200 formulas with one combinators. Using
+constants, a first pass would generate 1200 formulas with one combinator. Using
 these as an initial set, a second pass would generate more than 4,000,000
 formulas, all of which would contain at most two combinators. In order to get to
 interesting formulas that contain all three combinators, a third round of
@@ -156,3 +164,48 @@ The (assuredly naïve) scenario above highlights two points.
 %
 We first turn to the latter point, then tackle the issue of \emph{instance
 propagation}.
+
+The first, natural optimization that comes to mind consists in dropping lists in
+favor of a more sophisticated data type. We replace lists with a module
+\code{PSet} of persistent sets, implemented as red-black trees.
+
+This is still not enough. A big source of inefficiency is the call to the
+\code{cartesian\_product} function above (\sref{sec:algebra}). We hold in memory
+at the same time all possible products, then pipe them into the function calls
+so as to generate an even bigger set of elements. Only when the set of all
+elements has been constructed do we actually run \code{destruct}, only to
+extract the instances that we have created in the process.
+
+Holding in memory the set of all possible products is too expensive. We adopt
+instead a \emph{symbolic representation of sets}, where unions and products are
+explicitly represented using constructors.
+%
+% 7dd765501e4d12d98e9d90a0ece490486cfe6913
+\begin{ocamlcode}
+type _ set =
+  | Set   : 'a PSet.t -> 'a set
+  | Bij   : 'a set * ('a, 'b) bijection -> 'b set
+  | Union   : 'a set * 'b set -> ('a,'b) sum set
+  | Product : 'a set * 'b set -> ('a * 'b) set
+\end{ocamlcode}
+%
+This does not suppress the combinatorial explosion. The instance space is still
+exponentially large; what we gained by changing our representation is that we
+no longer hold all the ``intermediary'' instances in memory
+\emph{simultaneously}. This allows us to write an \code{iter} function that
+constructs the various instances on-the-fly.
+%
+\begin{ocamlcode}
+  let rec iter: type a. (a -> unit) -> a set -> unit =
+  fun f s -> match s with
+    | Set ps ->
+        PSet.iter f ps
+    | Union (pa,pb) ->
+        iter (fun a -> f (L a)) pa;
+        iter (fun b -> f (R b)) pb;
+    | Product (pa,pb) ->
+        iter (fun a -> iter (fun b -> f (a,b)) pb) pa
+    | (* ... *)
+\end{ocamlcode}
+%
+
