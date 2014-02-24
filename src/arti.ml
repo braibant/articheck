@@ -23,12 +23,12 @@ module PSet = struct
     let rec mem compare x = function
       | Empty -> false
       | Red (l,v,r) | Black (l,v,r) ->
-	begin
-	  match compare x v with
-	  | -1 -> mem compare x l
-	  | 0 -> true
-	  | _ -> mem compare x r
-	end
+        begin
+          match compare x v with
+          | -1 -> mem compare x l
+          | 0 -> true
+          | _ -> mem compare x r
+        end
 
     let blacken = function
       | Red (l,v,r) -> Black (l,v,r)
@@ -36,47 +36,47 @@ module PSet = struct
 
     let balance = function
       | Black ((Red (Red (a, x, b), y, c)
-		   | Red (a, x, Red (b, y, c))), z, d)
+                   | Red (a, x, Red (b, y, c))), z, d)
       | Black (a, x, (Red (Red (b, y, c), z, d)
-			 | Red (b, y, Red (c, z, d))))
-	-> Red (Black (a, x, b), y, Black (c, z, d))
+                         | Red (b, y, Red (c, z, d))))
+        -> Red (Black (a, x, b), y, Black (c, z, d))
       | n -> n
 
     let insert compare x n =
       let rec insert x t = match t with
-	| Empty -> Red (Empty, x, Empty)
-	| Red (l,v,r) ->
-	  begin match compare x v with
-	  | -1 -> Red (insert x l,v,r)
-	  | 0 -> Red (l,v,r)
-	  | _ -> Red (l,v,insert x r)
-	  end
-	| Black (l,v,r) ->
-	  begin match compare x v with
-	  | -1 -> balance (Black (insert x l,v,r))
-	  | 0 -> Black (l,v,r)
-	  | _ -> balance (Black (l,v,insert x r))
-	  end
+        | Empty -> Red (Empty, x, Empty)
+        | Red (l,v,r) ->
+          begin match compare x v with
+          | -1 -> Red (insert x l,v,r)
+          | 0 -> Red (l,v,r)
+          | _ -> Red (l,v,insert x r)
+          end
+        | Black (l,v,r) ->
+          begin match compare x v with
+          | -1 -> balance (Black (insert x l,v,r))
+          | 0 -> Black (l,v,r)
+          | _ -> balance (Black (l,v,insert x r))
+          end
       in blacken (insert x n)
 
     let rec elements = function
       | Empty -> []
       | Red (l,v,r) | Black (l, v, r) ->
-	elements l @ (v::elements r)
+        elements l @ (v::elements r)
 
     (* let rec fold_left f acc = function *)
     (*   | Empty -> acc *)
     (*   | Red (l,v,r) | Black (l,v,r) -> *)
-    (* 	let acc = fold_left f acc l in *)
-    (* 	let acc = f acc v in *)
-    (* 	fold_left f acc r *)
+    (*  let acc = fold_left f acc l in *)
+    (*  let acc = f acc v in *)
+    (*  fold_left f acc r *)
 
     let rec iter f = function
       | Empty -> ()
       | Red (l,v,r) | Black (l,v,r) ->
-	iter f l;
-	f v;
-	iter f r
+        iter f l;
+        f v;
+        iter f r
 
 
     let rec cardinal = function
@@ -247,12 +247,12 @@ module Eval = struct
     begin match s with
       | Set ps -> PSet.iter f  ps
       | Union (pa,pb) ->
-	iter (fun a -> f (L a)) pa;
-	iter (fun b -> f (R b)) pb;
+        iter (fun a -> f (L a)) pa;
+        iter (fun b -> f (R b)) pb;
       | Bij (ps, bij) ->
         iter (fun a -> f (fst bij a)) ps
       | Product (pa,pb) ->
-	iter (fun a -> iter (fun b -> f (a,b)) pb) pa
+        iter (fun a -> iter (fun b -> f (a,b)) pb) pa
     end
 
   type (_,_) scaffold =
@@ -261,50 +261,50 @@ module Eval = struct
 
 
     (** Now comes the reason for separating positives and negatives in
-	two distinct groups: they are used in very different ways to
-	produce new elements.
+        two distinct groups: they are used in very different ways to
+        produce new elements.
 
-	When available, a function of type [a], described as a [(a, b)
-	negative], can be applied to deduce new values of type
-	[b]. This requires producing known values for its (positive)
-	arguments.
+        When available, a function of type [a], described as a [(a, b)
+        negative], can be applied to deduce new values of type
+        [b]. This requires producing known values for its (positive)
+        arguments.
 
-	There are two pitfalls here.
+        There are two pitfalls here.
 
-	First, it is completely inefficient to build a list of results
-	by evaluating a function and merge them in the codom type
-	afterwards. This list is potentially big, and one can run into
-	Stack_overflow issues.
+        First, it is completely inefficient to build a list of results
+        by evaluating a function and merge them in the codom type
+        afterwards. This list is potentially big, and one can run into
+        Stack_overflow issues.
 
-	Second, it is tempting to add new elements to the mutable
-	enumeration of the types on the fly, but we can run into
-	non-termination, as soon as we have a function of type [t -> _
-	-> t].
+        Second, it is tempting to add new elements to the mutable
+        enumeration of the types on the fly, but we can run into
+        non-termination, as soon as we have a function of type [t -> _
+        -> t].
 
-	Therefore, we proceed by building a scaffold (a snapshot of the
-	enumeration of the types before evaluating the function), and
-	will iterate on this fix snapshot.  *)
+        Therefore, we proceed by building a scaffold (a snapshot of the
+        enumeration of the types before evaluating the function), and
+        will iterate on this fix snapshot.  *)
 
   let rec scaffold:
   type a b. (a,b) negative -> (a,b) scaffold =
       function
-	| Ret p -> Nil p
-	| Fun (p,n) -> Cons (produce p,(scaffold n))
+        | Ret p -> Nil p
+        | Fun (p,n) -> Cons (produce p,(scaffold n))
   and
     produce:
   type a. a positive -> a set =
       function
-	| Ty ty ->
-	  Set (ty.enum)
+        | Ty ty ->
+          Set (ty.enum)
         | Bij (p, bij) ->
           Bij (produce p, bij)
-	| Prod (pa,pb) ->
-	  Product (produce pa, produce pb)
-	| Sum (pa, pb) ->
-	  Union (produce pa, produce pb)
+        | Prod (pa,pb) ->
+          Product (produce pa, produce pb)
+        | Sum (pa, pb) ->
+          Union (produce pa, produce pb)
 
     (** A positive datatype can be destructed by pattern-matching to
-	discover new values for the atomic types at its leaves. *)
+        discover new values for the atomic types at its leaves. *)
   let rec destruct:
   type a . a positive -> a -> unit = function
     | Ty ty -> begin fun v -> Ty.add v ty end
@@ -325,7 +325,7 @@ module Eval = struct
     match sd with
       | Nil p -> destruct p f
       | Cons (s,sd) ->
-	iter (fun e -> eval sd (f e)) s
+        iter (fun e -> eval sd (f e)) s
 
   let main:
   type a b.  (a,b) negative -> a -> unit = fun  n f ->
@@ -345,12 +345,12 @@ let counter_example msg pos f =
   let n = ref 0 in
   begin
     try Eval.iter
-	  (fun e ->
-	    incr n;
-	    if not (f e)
-	    then (r := Some e; raise Found))
-	  (Eval.produce pos);
-	Printf.eprintf "[%.12s] Passed %i tests without counter-examples\n" msg (!n);
+          (fun e ->
+            incr n;
+            if not (f e)
+            then (r := Some e; raise Found))
+          (Eval.produce pos);
+        Printf.eprintf "[%.12s] Passed %i tests without counter-examples\n" msg (!n);
     with Found -> ()
   end;
   !r
@@ -370,10 +370,10 @@ struct
   module M = struct
     module HT = Hashtbl.Make(
       struct
-	type t = atom
-	let uid (Atom ty) = ty.uid
-	let hash = uid
-	let equal = eq_atom
+        type t = atom
+        let uid (Atom ty) = ty.uid
+        let hash = uid
+        let equal = eq_atom
       end
       )
     type key = atom
@@ -408,13 +408,13 @@ struct
           let outputs = pos_atoms head in
           if List.exists (eq_atom atom) outputs then begin
             List.iter (fun (Atom ty) -> touch env ty) inputs;
-	    Eval.main fd f
+            Eval.main fd f
           end
-	) sig_;
-	(* use fresh *)
+        ) sig_;
+        (* use fresh *)
         let (Atom ty) = atom in
-	Ty.populate 10 ty;
-	{ produced = Ty.cardinal ty;
+        Ty.populate 10 ty;
+        { produced = Ty.cardinal ty;
           required = ty.size }
     in F.lfp eqs
 
