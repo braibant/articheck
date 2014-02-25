@@ -1,1 +1,56 @@
 \section{Examples}
+
+\subsection{Red-black trees}
+The (abridged) interface exported by red-black trees is as follows. The module
+provides iteration facilities over the tree structure through the use of
+% TODO \cite
+\emph{zippers}. Our data structures are persistent.
+%
+\begin{ocamlcode}
+module type RBT = sig
+  type 'a t
+
+  val empty : 'a t
+  val insert : 'a -> 'a t -> 'a t
+
+  type direction = Left | Right
+  (* type 'a zipper *)
+  type 'a ptr (* = 'a t * 'a zipper *)
+
+  val zip_open : 'a t -> 'a ptr
+  val zip_close : 'a ptr -> 'a t
+
+  val move_up : 'a ptr -> 'a ptr option
+  val move : direction -> 'a ptr -> 'a ptr option
+end
+\end{ocamlcode}
+%
+This examples highlights several strengths of \arti.
+
+First, two different types are involved: the type of trees and the type of
+zippers. While an aficionado of internal testing may use the \code{empty} and
+\code{insert} functions repeatedly to create new instances of \code{'a t}, it
+becomes harder to type-check calls to \emph{either} \code{insert} or
+\code{zip\_open}. Our framework, thanks to GADTs, generates instances of both
+types painlessly and automatically.
+
+Second, we argue that a potential mistake is detected trivially by \arti, while
+it may turn out to be harder to detect using internal testing. If one removes
+the comments, the signature reveals that pointers into a tree are made up of a
+zipper along with a tree itself. It seems fairly natural that the developer
+would want to reveal the \code{zipper} type; it is, after all, a fundamental
+feature of the module. An undercaffeinated developer, when writing internal test
+functions, would probably perform sequences of calls to the various functions.
+What they would fail to do, however, is destructing pairs so as to produce
+a zipper associated with \emph{the wrong tree}. This particularly wicked usage
+would probably be overlooked. \arti successfully destructs the pair and performs
+recombinations, to finally output:
+\begin{verbatim}
+  TODO: fix the code so that it terminates
+    ... and put the error message here
+\end{verbatim}
+
+\subsection{Binary Decision Diagrams (BDDs)}
+
+% TODO: do we check the invariant for maximal sharing?
+% TODO: does \arti detect other potential mistakes?

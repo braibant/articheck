@@ -270,11 +270,11 @@ that this is actually a fixed-point computation.
 %
 \begin{ocamlcode}
 module Fix = sig
-  type     eqns = var -> rhs
-  and       rhs = valuation -> property
-  and valuation = var -> property
+  type valuation = variable -> property
+  type rhs = valuation -> property
+  type equations = variable -> rhs
 
-  val       lfp:  equations -> valuation
+  val lfp: equations -> valuation
 end
 \end{ocamlcode}
 %
