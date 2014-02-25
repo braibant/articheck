@@ -28,7 +28,7 @@
 \copyrightdata{978-1-nnnn-nnnn-n/yy/mm}
 \doi{nnnnnnn.nnnnnnn}
 
-\title{Functional pearl: zero-knowledge testing for module interfaces}
+\title{\arti: well-typed generic fuzzing for module interfaces}
 
 \authorinfo{
   Thomas Braibant \quad
@@ -62,14 +62,16 @@
   generated to serve as test inputs.
 
   These classical methods of testing can be thought of as \emph{internal}
-  testing: the test routines access the internal representation of whatever
-  module should be checked. We propose a new method of \emph{external} testing
-  where test code checks an \emph{abstract} data structure. Our new testing
-  method takes a description of a \emph{module signature}, then builds sequences
-  of function calls that generate elements of the abstract type just like any
-  other client code. Counter-examples, if any, are then presented to the user.
+  testing: the test routines access the internal representation of whatever data
+  structure should be checked. We propose a new method of \emph{external}
+  testing where the library only deals with a \emph{module interface}. The data
+  structures are exported as \emph{abstract types}; the testing framework
+  behaves just like regular client code and combines functions exported by the
+  module to build new elements of the various types. Counter-examples, if any,
+  are then presented to the user.
 \end{abstract}
 
+% TODO
 \category{CR-number}{subcategory}{third-level}
 
 \keywords{
@@ -81,6 +83,8 @@ quickcheck
 \input{introduction}
 \input{anexample}
 \input{representing}
+\input{properties}
+\input{examples}
 \input{body}
 
 \bibliographystyle{plain}
