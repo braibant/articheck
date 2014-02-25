@@ -4,7 +4,6 @@ sig
   val insert : 'a -> 'a t -> 'a t
   val iter : ('a -> unit) -> 'a t -> unit
   val cardinal : 'a t -> int
-  val create : ('a -> 'a -> int) -> int -> 'a t
 end
 
 (* ------------------------------------------------------------------------ *)
@@ -65,7 +64,10 @@ end = struct
 
 end
 
-module Sample : S = struct
+module Sample : sig
+  include S
+  val create : int -> 'a t
+end = struct
 
   type 'a t =
     {
@@ -74,7 +76,7 @@ module Sample : S = struct
       count : int;
     }
 
-  let create _ size = {elements = None; count = 0; size}
+  let create size = {elements = None; count = 0; size}
 
   let insert e v =
     match v.elements with
@@ -103,9 +105,10 @@ end
 (* ------------------------------------------------------------------------ *)
 
 (** {2 Bags implemented as polymorphic sets } *)
-module PSet : S = struct
-
-
+module PSet : sig
+  include S
+  val create : ('a -> 'a -> int) -> 'a t
+end = struct
   (* This code is different from the other implementation of RBT
      below, by intension*)
   module RBT = struct
@@ -165,8 +168,30 @@ module PSet : S = struct
       compare: 'a -> 'a -> int;
     }
 
-  let create compare _ = {set= RBT.empty; compare}
+  let create compare = {set= RBT.empty; compare}
   let insert x s = {s with set = RBT.insert s.compare x s.set}
   let cardinal s = RBT.cardinal s.set
   let iter f s = RBT.iter f s.set
 end
+
+type 'a t = {
+  insert : 'a -> 'a t;
+  iter : ('a -> unit) -> unit;
+  cardinal : unit -> int;
+}
+
+module Pack (Impl : S) = struct
+  let rec pack (bag : 'a Impl.t) : 'a t = {
+    insert = (fun x -> pack (Impl.insert x bag));
+    iter = (fun f -> Impl.iter f bag);
+    cardinal = (fun () -> Impl.cardinal bag);
+  }
+end
+
+let sample n =
+  let module P = Pack(Sample) in
+  P.pack (Sample.create n)
+
+let pset cmp =
+  let module P = Pack(PSet) in
+  P.pack (PSet.create cmp)

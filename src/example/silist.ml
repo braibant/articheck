@@ -1,4 +1,4 @@
-open Arti.Sample
+open Arti
 
 module SIList = struct
   type t = int list

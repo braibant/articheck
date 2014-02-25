@@ -1,4 +1,4 @@
-open Arti.Sample
+open Arti
 
 (** {3 Red-black trees } *)
 
