@@ -31,9 +31,9 @@ end
     match h1, h2 with
       | e, Null | Null, e -> e
       | Fork (x,l,r), h when top h1 <= top h2 ->
-	Fork (x,r,merge l h)
+        Fork (x,r,merge l h)
       | h, Fork (x,l,r) ->
-	Fork (x,r,merge l h)
+        Fork (x,r,merge l h)
 
   let pop = function
     | Null -> None
@@ -72,7 +72,7 @@ end
 
   let rec log2 n =
     if n <= 0
-    then 0			(* invalid_arg "" *)
+    then 0                      (* invalid_arg "" *)
     else if n = 1
     then 1 else
       1 + log2 (n / 2)

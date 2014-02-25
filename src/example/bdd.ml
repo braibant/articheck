@@ -43,16 +43,16 @@ end = struct
       | Zero -> 0
       | One  -> 1
       | Node (v,l,h,_) ->
-	(v + uid l * 3 + uid h * 5) land max_int
+        (v + uid l * 3 + uid h * 5) land max_int
 
     let equal x y =
       match x, y with
-	| One, One | Zero, Zero -> true
-	| Node (v1,l1,h1,_), Node (v2,l2,h2,_) ->
-	  v1 = v2
-	  && uid l1 == uid l2
-	  && uid h1 == uid h2
-	| _,_ -> false
+        | One, One | Zero, Zero -> true
+        | Node (v1,l1,h1,_), Node (v2,l2,h2,_) ->
+          v1 = v2
+          && uid l1 == uid l2
+          && uid h1 == uid h2
+        | _,_ -> false
   end
 
   module WHT = Weak.Make(T)
@@ -73,11 +73,11 @@ end = struct
     then low
     else
       begin
-      	let o1 = Node (v,low,high,!counter) in
-      	let o2 = WHT.merge table o1 in
-      	if o1 == o2
-      	then (incr counter; o1)
-      	else o2
+        let o1 = Node (v,low,high,!counter) in
+        let o2 = WHT.merge table o1 in
+        if o1 == o2
+        then (incr counter; o1)
+        else o2
       end
 
   let equal x y = x == y
@@ -118,46 +118,46 @@ end = struct
   let mk_and =
     let mk_and (mk_and: (expr * expr) -> expr) (x,y) =
       match x, y with
-	| One, e | e, One -> e
-	| Zero, _ | _, Zero -> Zero
-	| (Node (v1,l1,h1,_) as n1) , (Node (v2,l2,h2,_) as n2) ->
-	  if v1 = v2 then mk_node v1 ~low:(mk_and (l1,l2)) ~high:(mk_and (h1,h2))
-	  else if v1 < v2 then mk_node v1 ~low:(mk_and (l1,n2)) ~high:(mk_and (h1,n2))
-	  else mk_node v2 ~low:(mk_and (n1,l2)) ~high:(mk_and (n1,h2))
+        | One, e | e, One -> e
+        | Zero, _ | _, Zero -> Zero
+        | (Node (v1,l1,h1,_) as n1) , (Node (v2,l2,h2,_) as n2) ->
+          if v1 = v2 then mk_node v1 ~low:(mk_and (l1,l2)) ~high:(mk_and (h1,h2))
+          else if v1 < v2 then mk_node v1 ~low:(mk_and (l1,n2)) ~high:(mk_and (h1,n2))
+          else mk_node v2 ~low:(mk_and (n1,l2)) ~high:(mk_and (n1,h2))
     in
     memo_rec2 mk_and;;
 
   let mk_or =
     let mk_or (mk_or: (expr * expr) -> expr) (x,y) =
       match x, y with
-	| One, _ | _, One -> One
-	| Zero, e | e, Zero -> e
-	| (Node (v1,l1,h1,_) as n1) , (Node (v2,l2,h2,_) as n2) ->
-	  if v1 = v2 then mk_node v1 ~low:(mk_or (l1,l2)) ~high:(mk_or (h1,h2))
-	  else if v1 < v2 then mk_node v1 ~low:(mk_or (l1,n2)) ~high:(mk_or (h1,n2))
-	  else mk_node v2 ~low:(mk_or (n1,l2)) ~high:(mk_or (n1,h2))
+        | One, _ | _, One -> One
+        | Zero, e | e, Zero -> e
+        | (Node (v1,l1,h1,_) as n1) , (Node (v2,l2,h2,_) as n2) ->
+          if v1 = v2 then mk_node v1 ~low:(mk_or (l1,l2)) ~high:(mk_or (h1,h2))
+          else if v1 < v2 then mk_node v1 ~low:(mk_or (l1,n2)) ~high:(mk_or (h1,n2))
+          else mk_node v2 ~low:(mk_or (n1,l2)) ~high:(mk_or (n1,h2))
     in
     memo_rec2 mk_or;;
 
   let mk_not =
     let mk_not mk_not x =
       match x with
-	| One -> Zero
-	| Zero -> One
-	| Node (v,l,h,_) ->
-	  mk_node v (mk_not l) (mk_not h)
+        | One -> Zero
+        | Zero -> One
+        | Node (v,l,h,_) ->
+          mk_node v (mk_not l) (mk_not h)
     in
     memo_rec1 mk_not
 
   let mk_xor =
     let mk_xor (mk_xor: (expr * expr) -> expr) (x,y) =
       match x, y with
-	| One, e | e, One -> mk_not e
-	| Zero, e | e, Zero -> e
-	| (Node (v1,l1,h1,_) as n1) , (Node (v2,l2,h2,_) as n2) ->
-	  if v1 = v2 then mk_node v1 ~low:(mk_xor (l1,l2)) ~high:(mk_xor (h1,h2))
-	  else if v1 < v2 then mk_node v1 ~low:(mk_xor (l1,n2)) ~high:(mk_xor (h1,n2))
-	  else mk_node v2 ~low:(mk_xor (n1,l2)) ~high:(mk_xor (n1,h2))
+        | One, e | e, One -> mk_not e
+        | Zero, e | e, Zero -> e
+        | (Node (v1,l1,h1,_) as n1) , (Node (v2,l2,h2,_) as n2) ->
+          if v1 = v2 then mk_node v1 ~low:(mk_xor (l1,l2)) ~high:(mk_xor (h1,h2))
+          else if v1 < v2 then mk_node v1 ~low:(mk_xor (l1,n2)) ~high:(mk_xor (h1,n2))
+          else mk_node v2 ~low:(mk_xor (n1,l2)) ~high:(mk_xor (n1,h2))
     in
     memo_rec2 mk_xor;;
 

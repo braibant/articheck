@@ -19,7 +19,7 @@ module type RBT = sig
 
   (* public type, part of the user interface for the 'move' function *)
   type direction = Left | Right
-  type 'a zipper
+  (* type 'a zipper *)
   type 'a pointer (* = 'a t * 'a zipper *)
 
   val zip_open : 'a t -> 'a pointer
@@ -40,10 +40,10 @@ module RBT : RBT  = struct
     | Empty -> false
     | Red (l,v,r) | Black (l,v,r) ->
       begin
-	match compare x v with
-	| -1 -> mem x l
-	| 0 -> true
-	| _ -> mem x r
+        match compare x v with
+        | -1 -> mem x l
+        | 0 -> true
+        | _ -> mem x r
       end
 
   let blacken = function
@@ -188,13 +188,13 @@ let ptropt_t = option ptr_t
 let zip_sig =
   let open RBT in
   Sig.((* rbt_sig @ *)
-	 [
+         [
            val_ "zip_open" (rbt_t @-> returning ptr_t) zip_open;
            val_ "zip_close" (ptr_t @-> returning rbt_t) zip_close;
 
            val_ "move_up" (ptr_t @-> returning ptropt_t) move_up;
            val_ "move" (dir_t @-> ptr_t @-> returning ptropt_t) move;
-	 ])
+         ])
 
 let () = Sig.populate zip_sig
 

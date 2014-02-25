@@ -12,8 +12,8 @@ module Zdd = struct
   type uid = int
   type var = E.t
   type expr =
-    | Bot 				(* {} *)
-    | Top 				(* {{}} *)
+    | Bot                               (* {} *)
+    | Top                               (* {{}} *)
     | Node of uid * expr * expr * var
 
   let uid = function
@@ -25,18 +25,18 @@ module Zdd = struct
     type t = expr
 
       (** The hash-function on ZDD nodes must return in O(1)
-	  time. Therefore, it is not recursive. *)
+          time. Therefore, it is not recursive. *)
     let hash = function
       | Top -> 0
       | Bot -> 1
       | Node (_,l,r,v) ->
-	let (+) x y = x lsl 8 lxor y in
-	(uid l + uid r + E.hash v) land max_int
+        let (+) x y = x lsl 8 lxor y in
+        (uid l + uid r + E.hash v) land max_int
 
       (** The equality function on ZDD nodes is not recursive
-	  either. It relies on the fact that sub-nodes are hash-consed,
-	  and thus, we have the maximal sharing property: [==] holds iff
-	  [=] holds. *)
+          either. It relies on the fact that sub-nodes are hash-consed,
+          and thus, we have the maximal sharing property: [==] holds iff
+          [=] holds. *)
     let equal x y = match x,y with
       | Top, Top | Bot, Bot -> true
       | Node (_,l1,r1,v1), Node (_,l2,r2,v2) -> l1 == l2 && r1 == r2 && E.compare v1 v2 = 0
@@ -56,8 +56,8 @@ module Zdd = struct
   let bot = Bot
 
     (** [node l r v] is a smart node-constructor. It enforces the
-	maximal sharing property, and the fact that the right child of a
-	node is never Bot *)
+        maximal sharing property, and the fact that the right child of a
+        node is never Bot *)
   let node l r v =
     if r = Bot then l
     else
@@ -67,18 +67,18 @@ module Zdd = struct
       o2
 
     (** Since all expressions are endowed with the maximal sharing
-	property, we can use physical equality rather for semantic
-	equality.  *)
+        property, we can use physical equality rather for semantic
+        equality.  *)
   let equal (x: expr) (y: expr) = x == y
 
     (** We can also equip expressions with a O(1) comparison function,
-	based on uids.  *)
+        based on uids.  *)
   let compare x y = Pervasives.compare (uid x) (uid y)
 
 
     (** Now, we turn to memoizing constructs. We build the module [H1]
-	(resp. [H2]) as instances of hash-tables that are used to tabulate
-	the recursive calls of operations on ZDDs.  *)
+        (resp. [H2]) as instances of hash-tables that are used to tabulate
+        the recursive calls of operations on ZDDs.  *)
   module N1 = struct
     type t = expr
     let hash x = uid x
@@ -107,9 +107,9 @@ module Zdd = struct
     let rec g x =
       try H1.find h x
       with Not_found ->
-	let r = f g x in
-	H1.add h x r;
-	r
+        let r = f g x in
+        H1.add h x r;
+        r
     in
     g
 
@@ -119,9 +119,9 @@ module Zdd = struct
     let rec g x =
       try H2.find h x
       with Not_found ->
-	let r = f g x in
-	H2.add h x r;
-	r
+        let r = f g x in
+        H2.add h x r;
+        r
     in
     g
 
@@ -132,7 +132,7 @@ module Zdd = struct
       | Top -> ESS.singleton ES.empty
       | Bot -> ESS.empty
       | Node (_,l,r,v) ->
-	ESS.union (denote l) (ESS.fold (fun s acc -> ESS.add (ES.add v s) acc) (denote r) ESS.empty)
+        ESS.union (denote l) (ESS.fold (fun s acc -> ESS.add (ES.add v s) acc) (denote r) ESS.empty)
     in
     memo_rec1 denote x
 
@@ -150,13 +150,13 @@ module Zdd = struct
       | Node (_,l,r,v),Top -> node (union (l,Top)) r v
       | Bot, x | x, Bot -> x
       | (Node (_,l1,r1,v1) as n1) , (Node (_,l2,r2,v2) as n2) ->
-	match E.compare v1 v2 with
-	  | 0 ->
-	    node (union (l1,l2)) (union (r1,r2)) v1
-	  | -1 ->  			(* v1 < v2 *)
-	    node (union (l1,n2)) r1 v1
-	  | _ ->
-	    node (union (n1,l2)) r2 v2
+        match E.compare v1 v2 with
+          | 0 ->
+            node (union (l1,l2)) (union (r1,r2)) v1
+          | -1 ->                       (* v1 < v2 *)
+            node (union (l1,n2)) r1 v1
+          | _ ->
+            node (union (n1,l2)) r2 v2
     in
     fun x y -> memo_rec2 union (x,y)
 
@@ -166,13 +166,13 @@ module Zdd = struct
       | Top, Top -> Top
       | Node (_,l,_,_), Top | Top, Node (_,l,_,_) -> inter (l,Top)
       | (Node (_,l1,r1,v1) as n1) , (Node (_,l2,r2,v2) as n2) ->
-	match E.compare v1 v2 with
-	  | 0 ->
-	    node (inter (l1,l2)) (inter (r1,r2)) v1
-	  | -1 ->  			(* v1 < v2 *)
-	    inter (n2,l1)
-	  | _ ->
-	    inter (n1,l2)
+        match E.compare v1 v2 with
+          | 0 ->
+            node (inter (l1,l2)) (inter (r1,r2)) v1
+          | -1 ->                       (* v1 < v2 *)
+            inter (n2,l1)
+          | _ ->
+            inter (n1,l2)
     in
     fun x y -> memo_rec2 inter (x,y)
 
@@ -182,13 +182,13 @@ module Zdd = struct
       | Bot, x | x, Bot -> x
       | Node (_,l,r,v), Top | Top, Node (_,l,r,v) -> node (xor (l,Top)) r  v
       | (Node (_,l1,r1,v1) as n1) , (Node (_,l2,r2,v2) as n2) ->
-	match E.compare v1 v2 with
-	  | 0 ->
-	    node (xor (l1,l2)) (xor (r1,r2)) v1
-	  | -1 ->  			(* v1 < v2 *)
-	    node (xor (l1,n2)) r1 v1
-	  | _ ->
-	    node (xor (n1,l1)) r2 v2
+        match E.compare v1 v2 with
+          | 0 ->
+            node (xor (l1,l2)) (xor (r1,r2)) v1
+          | -1 ->                       (* v1 < v2 *)
+            node (xor (l1,n2)) r1 v1
+          | _ ->
+            node (xor (n1,l1)) r2 v2
     in
     fun x y -> memo_rec2 xor (x,y)
 
@@ -198,7 +198,7 @@ module Zdd = struct
       | Bot -> acc
       | Top -> f s acc
       | Node (_,l,r,v) ->
-	aux (ES.add v s) (aux s acc l) r
+        aux (ES.add v s) (aux s acc l) r
     in
     aux ES.empty acc zdd
 
@@ -208,14 +208,14 @@ module Zdd = struct
       | Bot, _ -> true
       | Top, Bot -> false
       | Top, _ -> (* the rightmost leaf of y cannot be [Bot] *)
-	true
+        true
       | (Node (_,l1,r1,v1) as n1), Node (_,l2,r2,v2) ->
-	begin match E.compare v1 v2 with
-	  | 0 ->
-	    subset (l1,l2) && subset (r1,r2)
-	  | -1 -> false
-	  | _ -> subset (n1,l2)
-	end
+        begin match E.compare v1 v2 with
+          | 0 ->
+            subset (l1,l2) && subset (r1,r2)
+          | -1 -> false
+          | _ -> subset (n1,l2)
+        end
       | Node (_,_,_,_), Top
       |  Node (_,_,_,_), Bot -> false
     in
@@ -226,16 +226,16 @@ module Zdd = struct
   let mem (e: ES.t) (zdd: expr) =
     let rec aux e zdd =
       match e, zdd with
-	| [], Bot -> false
-	| [], Top -> true
-	| [], Node (_,l,_,_) -> aux [] l
-	| (t::q as e), Node (_,l,r,v) ->
-	  begin match E.compare t v with
-	    | 0 -> aux q r
-	    | -1 -> false
-	    | _ -> aux e l
-	  end
-	| _, _ -> false
+        | [], Bot -> false
+        | [], Top -> true
+        | [], Node (_,l,_,_) -> aux [] l
+        | (t::q as e), Node (_,l,r,v) ->
+          begin match E.compare t v with
+            | 0 -> aux q r
+            | -1 -> false
+            | _ -> aux e l
+          end
+        | _, _ -> false
     in
     aux (ES.elements e) zdd
 
