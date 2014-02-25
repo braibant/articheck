@@ -187,7 +187,7 @@ end = struct
   let robdd x = reduced x && ordered x
 end
 
-open Arti.Sample
+open Arti
 
 let bdd_t = atom (Ty.declare  ~ident:"bdd" () : BDD.t ty)
 let var_t =

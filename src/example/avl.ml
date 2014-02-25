@@ -1,4 +1,4 @@
-open Arti.Sample
+open Arti
 
 module AVL = struct
   type 'a t =
