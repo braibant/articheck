@@ -4,7 +4,7 @@ sig
   val insert : 'a -> 'a t -> 'a t
   val iter : ('a -> unit) -> 'a t -> unit
   val cardinal : 'a t -> int
-  val create : ?cmp:('a -> 'a -> int) -> int -> 'a t
+  val create : ('a -> 'a -> int) -> int -> 'a t
 end
 
 (* ------------------------------------------------------------------------ *)
@@ -65,7 +65,7 @@ end = struct
 
 end
 
-module Sample : Bag = struct
+module Sample : S = struct
 
   type 'a t =
     {
@@ -74,7 +74,7 @@ module Sample : Bag = struct
       count : int;
     }
 
-  let create ?(cmp=(Pervasives.compare)) size = {elements = None; count = 0; size}
+  let create _ size = {elements = None; count = 0; size}
 
   let insert e v =
     match v.elements with
@@ -103,7 +103,7 @@ end
 (* ------------------------------------------------------------------------ *)
 
 (** {2 Bags implemented as polymorphic sets } *)
-module PSet : Bag = struct
+module PSet : S = struct
 
 
   (* This code is different from the other implementation of RBT
@@ -115,16 +115,6 @@ module PSet : Bag = struct
     | Black of 'a t * 'a * 'a t
 
     let empty = Empty
-
-    let rec mem compare x = function
-      | Empty -> false
-      | Red (l,v,r) | Black (l,v,r) ->
-        begin
-          match compare x v with
-          | -1 -> mem compare x l
-          | 0 -> true
-          | _ -> mem compare x r
-        end
 
     let blacken = function
       | Red (l,v,r) -> Black (l,v,r)
@@ -155,18 +145,6 @@ module PSet : Bag = struct
           end
       in blacken (insert x n)
 
-    let rec elements = function
-      | Empty -> []
-      | Red (l,v,r) | Black (l, v, r) ->
-        elements l @ (v::elements r)
-
-    (* let rec fold_left f acc = function *)
-    (*   | Empty -> acc *)
-    (*   | Red (l,v,r) | Black (l,v,r) -> *)
-    (*  let acc = fold_left f acc l in *)
-    (*  let acc = f acc v in *)
-    (*  fold_left f acc r *)
-
     let rec iter f = function
       | Empty -> ()
       | Red (l,v,r) | Black (l,v,r) ->
@@ -187,11 +165,8 @@ module PSet : Bag = struct
       compare: 'a -> 'a -> int;
     }
 
-  let create ?(cmp=(Pervasives.compare)) _ = {set= RBT.empty; compare}
+  let create compare _ = {set= RBT.empty; compare}
   let insert x s = {s with set = RBT.insert s.compare x s.set}
-  let mem x s = RBT.mem s.compare x s.set
   let cardinal s = RBT.cardinal s.set
-  let elements s = RBT.elements s.set
-  (* let fold_left f acc s  = RBT.fold_left f acc s.set *)
   let iter f s = RBT.iter f s.set
 end
