@@ -187,9 +187,9 @@ end = struct
   let robdd x = reduced x && ordered x
 end
 
-open Arti
+open Arti.Sample
 
-let bdd_t = atom (Ty.declare ~cmp:(BDD.compare) ~ident:"bdd" () : BDD.t ty)
+let bdd_t = atom (Ty.declare  ~ident:"bdd" () : BDD.t ty)
 let var_t =
   let ty = Ty.declare ~ident:"var" ~fresh:(fun _ -> Random.int 10) () in
   let () = Ty.populate 10 ty in
