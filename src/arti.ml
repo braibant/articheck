@@ -6,99 +6,6 @@ type ('a, 'b) sum =
 | L of 'a
 | R of 'b
 
-(** {2 Polymorphic sets, implemented as RBT}  *)
-module PSet = struct
-
-
-  (* This code is different from the other implementation of RBT
-     below, by intension*)
-  module RBT = struct
-    type 'a t =
-    | Empty
-    | Red of 'a t * 'a * 'a t
-    | Black of 'a t * 'a * 'a t
-
-    let empty = Empty
-
-    let rec mem compare x = function
-      | Empty -> false
-      | Red (l,v,r) | Black (l,v,r) ->
-        begin
-          match compare x v with
-          | -1 -> mem compare x l
-          | 0 -> true
-          | _ -> mem compare x r
-        end
-
-    let blacken = function
-      | Red (l,v,r) -> Black (l,v,r)
-      | (Empty | Black _) as n -> n
-
-    let balance = function
-      | Black ((Red (Red (a, x, b), y, c)
-                   | Red (a, x, Red (b, y, c))), z, d)
-      | Black (a, x, (Red (Red (b, y, c), z, d)
-                         | Red (b, y, Red (c, z, d))))
-        -> Red (Black (a, x, b), y, Black (c, z, d))
-      | n -> n
-
-    let insert compare x n =
-      let rec insert x t = match t with
-        | Empty -> Red (Empty, x, Empty)
-        | Red (l,v,r) ->
-          begin match compare x v with
-          | -1 -> Red (insert x l,v,r)
-          | 0 -> Red (l,v,r)
-          | _ -> Red (l,v,insert x r)
-          end
-        | Black (l,v,r) ->
-          begin match compare x v with
-          | -1 -> balance (Black (insert x l,v,r))
-          | 0 -> Black (l,v,r)
-          | _ -> balance (Black (l,v,insert x r))
-          end
-      in blacken (insert x n)
-
-    let rec elements = function
-      | Empty -> []
-      | Red (l,v,r) | Black (l, v, r) ->
-        elements l @ (v::elements r)
-
-    (* let rec fold_left f acc = function *)
-    (*   | Empty -> acc *)
-    (*   | Red (l,v,r) | Black (l,v,r) -> *)
-    (*  let acc = fold_left f acc l in *)
-    (*  let acc = f acc v in *)
-    (*  fold_left f acc r *)
-
-    let rec iter f = function
-      | Empty -> ()
-      | Red (l,v,r) | Black (l,v,r) ->
-        iter f l;
-        f v;
-        iter f r
-
-
-    let rec cardinal = function
-      | Empty -> 0
-      | Red (l,_,r) | Black (l,_,r) -> cardinal l + cardinal r + 1
-  end
-
-  (** {2 Wrapping the set with the associated comparison function.}  *)
-  type 'a t =
-    {
-      set: 'a RBT.t;
-      compare: 'a -> 'a -> int;
-    }
-
-  let create compare = {set= RBT.empty; compare}
-  let insert x s = {s with set = RBT.insert s.compare x s.set}
-  let mem x s = RBT.mem s.compare x s.set
-  let cardinal s = RBT.cardinal s.set
-  let elements s = RBT.elements s.set
-  (* let fold_left f acc s  = RBT.fold_left f acc s.set *)
-  let iter f s = RBT.iter f s.set
-end
 
 type ident = string
 
@@ -115,8 +22,8 @@ type 'a ty =
       uid: int;
       size: int;
       ident: string;
-      mutable enum: 'a PSet.t;
-      fresh: ('a PSet.t -> 'a) option;
+      mutable enum: 'a Sample.t;
+      fresh: ('a Sample.t -> 'a) option;
     }
 
 type ('a, 'b) bijection = ('a -> 'b) * ('b -> 'a)
@@ -168,18 +75,12 @@ module Ty = struct
     let r = ref (-1) in
     fun () -> incr r; !r
 
-  let mem (x: 'a) (s: 'a ty): bool =
-    PSet.mem x s.enum
-
-  let cardinal s = PSet.cardinal s.enum
+  let cardinal s = Sample.cardinal s.enum
 
   let equal s1 s2 = s1.uid = s2.uid
 
   let add (x: 'a) (s: 'a ty): unit =
-    s.enum <- PSet.insert x s.enum
-
-  let elements (s: 'a ty): 'a list =
-    PSet.elements s.enum
+    s.enum <- Sample.insert x s.enum
 
   (* ------------------------------------------------------------------------ *)
 
@@ -188,14 +89,13 @@ module Ty = struct
   (** This function allows one to declare a new type descriptor. All the
       * arguments are filled with sensible defaults. *)
   let declare
-      ?(cmp=(Pervasives.compare))
       ?(initial=[])
       ?(ident="<abstract>")
       ?fresh
       ()
       : 'a ty =
     {
-      enum = List.fold_left (fun acc x -> PSet.insert x acc) (PSet.create cmp) initial;
+      enum = List.fold_left (fun acc x -> Sample.insert x acc) (Sample.create 1000) initial;
       uid = gensym ();
       size = 1000;
       fresh;
@@ -237,7 +137,7 @@ let eq_atom (Atom t1) (Atom t2) = Ty.equal t1 t2
 module Eval = struct
 
   type _ set =
-    | Set   : 'a PSet.t -> 'a set
+    | Set   : 'a Sample.t -> 'a set
     | Bij   : 'a set * ('a, 'b) bijection -> 'b set
     | Union   : 'a set * 'b set -> ('a,'b) sum set
     | Product : 'a set * 'b set -> ('a * 'b) set
@@ -245,7 +145,7 @@ module Eval = struct
   let rec iter:
   type a.  (a -> unit) -> a set -> unit = fun f s ->
     begin match s with
-      | Set ps -> PSet.iter f  ps
+      | Set ps -> Sample.iter f  ps
       | Union (pa,pb) ->
         iter (fun a -> f (L a)) pa;
         iter (fun b -> f (R b)) pb;

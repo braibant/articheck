@@ -2,17 +2,6 @@ type ('a, 'b) sum =
 | L of 'a
 | R of 'b
 
-(** {2 Polymorphic sets, implemented as RBT}  *)
-
-module PSet :
-  sig
-    type 'a t
-    val create : ('a -> 'a -> int) -> 'a t
-    val insert : 'a -> 'a t -> 'a t
-    val mem : 'a -> 'a t -> bool
-    val cardinal : 'a t -> int
-    val elements : 'a t -> 'a list
-  end
 
 type ident = string
 
@@ -27,15 +16,12 @@ type ('a, 'b) negative and 'a positive
 
 module Ty :
   sig
-    val mem : 'a -> 'a ty -> bool
     val cardinal : 'a ty -> int
     val add : 'a -> 'a ty -> unit
-    val elements : 'a ty -> 'a list
     val declare :
-      ?cmp:('a -> 'a -> int) ->
       ?initial:'a list ->
       ?ident:string ->
-      ?fresh:('a PSet.t -> 'a) -> unit -> 'a ty
+      ?fresh:('a Sample.t -> 'a) -> unit -> 'a ty
     val populate : int -> 'a ty -> unit
   end
 
