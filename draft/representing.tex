@@ -1,11 +1,8 @@
-% TODO: the transition from the introduction is a little bit dry, we probably
-% need a few more paragraphs before that part.
-
 \section{Implementing \arti}
 \label{sec:representation}
 
 The simplistic design we introduced in \sref{sec:essence} conveys the main ideas
-behind \arti, yet fails to address a wide variety of cases. The present section
+behind \arti, yet fails to address a wide variety of problems. The present section
 reviews the issues with the current design and incrementally addresses them.
 
 \subsection{A better algebra of types}
@@ -33,6 +30,7 @@ obtain a \code{'b} from the product type \code{'a}, then what use is the second
 parameter of \code{eval}?
 
 In light of these limitations, we take inspiration from the literature on
+% TODO \cite
 focusing and break the \code{fn} type into two distinct GADTs.
 \begin{itemize}
   \item The GADT \code{('a, 'b) negative} (\code{neg} for short) represents a
@@ -54,30 +52,33 @@ and _ pos =
 | Prod : 'a pos  * 'b pos -> ('a * 'b) pos
 | Bij : 'a pos * ('a, 'b) bijection -> 'b pos
 
-and ('a, 'b) sum =
-| L of 'a
-| R of 'b
+and ('a, 'b) sum = L of 'a | R of 'b
 \end{ocamlcode}
 %
 The \code{pos} type represents first-order data types: products, sums and atomic
 types, that is, whatever is on the rightmost side of an arrow. We provide an
-injection from positive to negative types: a value of type \code{'a} is also a
-constant computation.
+injection from positive to negative types via the \code{Ret} constructor: a
+value of type \code{'a} is also a constant computation.
 
 We do \emph{not} provide an injection from negative types to positive types:
 this would allow nested arrows, that is, higher-order types.  One can take the
 example of the \code{map} function, which has type \code{('a -> 'b) -> 'a list
--> 'b list}: we explicitly disallow representing the \code{'a -> 'b} part as a
+-> 'b list}: we explicitly disallow
+% TODO jp: supposedly we're talking about that later on... I don't know where,
+% but when we do, put a forward reference.
+representing the \code{'a -> 'b} part as a
 \code{Fun} constructor, as it would require us to synthesize instances of a
-function type. Rather, we ask the user to represent \code{'a -> 'b} as a
-\code{Ty} constructor; in other words, we ask the user to supply their own test
-functions as if they were a built-in type.
+function type.
+% TODO jp: Gabriel more explanations here KTHXBYE
+Rather, we ask the user to represent \code{'a -> 'b} as a \code{Ty} constructor;
+in other words, we ask the user to supply their own test functions as if they
+were a built-in type.
 
-Since our GADT does not accurately model tagged, n-ary sums of OCaml, we provide
-a last \code{Bij} case that allows the user to provide a two-way mapping between
-a built-in type (say, \code{'a option}) and its \arti representation (\code{() +
-'a}). That way, \arti can work with regular OCaml data types by converting them
-back-and-forth.
+Our GADT does not accurately model tagged, n-ary sums of OCaml, nor records with
+named fields. We thus add a last \code{Bij} case; it allows the user to
+provide a two-way mapping between a built-in type (say, \code{'a option}) and
+its \arti representation (\code{() + 'a}). That way, \arti can work with regular
+OCaml data types by converting them back-and-forth.
 
 This change of representation incurs some changes on our evaluation functions
 as well. The \code{eval} function is split into several parts, which we detail
@@ -91,7 +92,7 @@ let rec apply: type a b. (a, b) neg -> a -> b list =
   ...
 and produce: type a. a pos -> a list =
   fun ty -> match ty with
-  | Ty ty -> Ty.elements ty
+  | Ty ty -> ty.enum
   | Prod (pa, pb) ->
       cartesian_product (produce pa) (produce pb)
   ...
@@ -108,7 +109,7 @@ let rec destruct: type a. a pos -> a -> unit =
 let _ =
   ...
   let li = apply fd f in
-  List.iter (destruct head) li;
+  List.iter destruct li;
   ...
 \end{ocamlcode}
 %
@@ -118,20 +119,20 @@ may destruct them: given a pair of type \code{'a * 'b}, the user may keep just
 the first element, thus obtaining a new \code{'a}. The same goes for sums. We
 thus provide a \code{destruct} function, which breaks down positives types by
 pattern-matching, populating the descriptions of the various types it encounters
-as it goes.
+as it goes. (The \code{remember} function records all instances we haven't
+encountered yet in the type descriptor \code{ty}.)
 
-Keeping this in mind, we must realize that if we can use a positive type
-\code{'a} to obtain a \code{'b} (\code{apply}), the user may use any possible
-means to produce an \code{'a}: if \code{'a} is a product, they will use every
-possible combination of elements that are available to them; if \code{'a} is a
-sum, they will either every choice from the type of either. We must therefore
-devise a function \code{produce} that represents the entire set of possible
-choices for a positive type.
+Keeping this in mind, we must realize that if a function takes an \code{'a}, the
+user may use any \code{'a} it can produce to call the function. For instance, in
+the case that \code{'a} is a product type \code{'a1 * 'a2}, then \emph{any} pair
+of \code{'a1} and \code{'a2} may work.  We introduce a function called
+\code{produce}, which reflects the fact the user may choose any possible pair:
+the function exhibits the entire set of instances we can build for a given type.
 
-The \code{apply} function, just like before, takes a \emph{computation} along
-with a matching description, and generates a set of \code{b}. However, it now
-relies on \code{product} to exhibit all possible instances of a type before
-passing these instances on to the actual function.
+Finally, the \code{apply} function, just like before, takes a \emph{computation}
+along with a matching description, and generates a set of \code{b}. However, it
+now relies on \code{product} to exhaustively exhibit all possible arguments one
+can pass to the function.
 
 We are now able to accurately model a calculus rich enough to test realistic
 signatures involving records, option types, and various ways to create
@@ -143,32 +144,34 @@ functions.
 The (assuredly naïve) scenario above reveals several pain points with the
 current design.
 \begin{itemize}
-  \item We represent our sets using lists. We could be more efficient.
-  \item If some function takes, say, a tuple, the code as it stands will construct
-    the set of all possible tuples, perform a \code{map}, then finally call
-    \code{destruct} on each resulting element to collect instances.
-    Naturally, memory explosion ensues. We propose a symbolic algebra for
-    \emph{sets of instances} that \emph{mirrors} the structure of positive
-    types and avoids the need for holding all possible combinations in
+  \item We represent our sets using lists. We could use a more efficient data
+    structure.
+  \item If some function takes, say, a tuple, the code as it stands will
+    construct the set of all possible tuples, \code{map} the function over the
+    set, then finally call \code{destruct} on each resulting element to collect
+    instances.  Naturally, memory explosion ensues. We propose a symbolic
+    algebra for \emph{sets of instances} that \emph{mirrors} the structure of
+    positive types and avoids the need for holding all possible combinations in
     memory at the same time.
-  \item Take the example of logical formulas. The naïve strategy consists in
-    generating formulas with one combinator in a first round, then passing the
-    freshly created instances into a second round to generate instances with two
-    combinators.  One may wish to be smarter and pass the instances generated
-    by, say, \code{mk\_and} to \code{mk\_xor} so as to generate formulas with
-    two operators in one round.  This approach is not feasible, because we run
-    into non-termination issues and fairness problems.
-  \item Interesting instances containing three combinators are only reached
-    after we've exhausted all possible instances with two or less combinators.
-    This breadth-first search of the instance space is sub-optimal. Can we do
-    better?
+  \item A seemingly trivial optimization sends us off the rails by generating an
+    insane number of instances. We explain how to optimize further the code
+    while still retaining a well-behaved generation.
+  \item Fairness issues arise.
+    Take the example of logical formulas. One may try to be smart: starting with
+    constants, one may apply \code{mk\_and}, then pass the freshly generated
+    instances to \code{mk\_xor}. A consequence is that all the formulas with two
+    combinators start with \code{xor}. If we just keep an iterative process and
+    do not chain the instance generation process, formulas containing three
+    combinators are only reached after we've exhausted all possible instances
+    with two or less combinators. This breadth-first search of the instance
+    space is sub-optimal. Can we do better?
 \end{itemize}
 %
 
 \paragraph{Sets of instances}
 The first, natural optimization that comes to mind consists in dropping lists in
 favor of a more sophisticated data type. We replace lists with a module
-\code{PSet} of persistent sets, implemented as red-black trees.
+\code{PSet} of polymorphic, persistent sets implemented as red-black trees.
 
 
 \paragraph{Not holding sets in memory}
@@ -222,11 +225,12 @@ instances. Also, calling \code{remember} directly eliminates the need to store
 duplicate items, as the function automatically takes care of dropping an
 instance if we are already aware of it.
 
-This seemingly innocuous optimization raised non-termination issues. We explain
-why, in the hope that it serves as an example for future generations (``kids,
-don't do mutable state'').
+This seemingly innocuous optimization raised combinatorial explosion issues. We
+explain why, in the hope that it serves as an example for future generations
+(``kids, don't do mutable state'').
 
-Consider the case of a function that has type \code{t -> t -> t}. The outer call
+Consider the case of a function that has type \code{t -> t -> t} and a
+corresponding type descriptor for \code{t} named \code{ty}. The outer call
 to \code{apply} binds the list of instances of \code{t} via \code{let l =
 ty.enum}. For each element of \code{l}, a recursive call to \code{apply} takes
 place (for the inner \code{t -> t} function), which looks up the current value
@@ -236,10 +240,13 @@ bigger and bigger. The programs terminates by exhausting its memory space
 without even returning from the outer call to \code{apply}.
 
 We solved this by taking a snapshot of our negative types before calling
-\code{apply}. That way, we save a copy of the arguments that are to be applied
-in each \code{Fun} case.
+\code{apply}. No copy is involved: function arguments (positive types) are
+represented in memory as persistent, pure symbolic sets. That way, we keep a
+copy of the arguments that are to be applied in each \code{Fun} case.
 
 \paragraph{Fairness of our search space}
+% TODO jp: we have to redo this part entirely (see my recap in the itemize
+% section at the beginning)
 Snapshotting enforces a breadth-first search of the instance space. The initial
 set of instances is fed through the available functions, and we iterate the
 process, until we've obtained a satisfactory number of instances for each one of
@@ -266,16 +273,21 @@ module Fix = sig
   type     eqns = var -> rhs
   and       rhs = valuation -> property
   and valuation = var -> property
+
+  val       lfp:  equations -> valuation
 end
 \end{ocamlcode}
 %
+% TODO \cite
 The signature above exposes the essence of \code{Fix}, the fixed-point computation
 framework we use. A system of equations maps a variable to a right-hand side.
 Each right-hand side can be evaluated by providing a valuation so as to obtain a
-property. Valuations map variables to properties.
+property. Valuations map variables to properties. Solving a system of equations
+amounts to calling the \code{lfp} function which, given a set of equations,
+returns the corresponding valuation.
 
 A perhaps tempting way to fit in this setting would be to define variables to be
-our \code{'a ty} (type descriptor) and properties to be \code{'a lists} (the
+our \code{'a ty} (type descriptor) and properties to be \code{'a list}s (the
 instances we have built so far). This doesn't work as is: since there will be
 multiple values of \code{'a} (we generate instances of different types
 simultaneously), type mismatches are to be expected. One could, after all, use
@@ -283,8 +295,8 @@ yet another GADT and hide the \code{'a} type parameter behind an existential
 variable.
 %
 \begin{ocamlcode}
-  type _ var = Atom: 'a ty
-  type _ property = Props: 'a list
+  type var = Atom: 'a ty -> var
+  type property = Props: 'a list -> property
 \end{ocamlcode}
 %
 The problem is that there is no way to statically prove that having an

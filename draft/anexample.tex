@@ -68,11 +68,11 @@ type 'a ty = {
 }
 \end{ocamlcode}
 %
-A type descriptor \code{'a ty} keeps track of all the \emph{instances} we have
-created so far in its \code{enum} field. Built-in types such as \code{int}
-do not belong to the set of types whose invariants we wish to check. For such
-types, we provide a \code{fresh} function that generates an instance different
-from all that we have generated so far.
+A type descriptor \code{'a ty} keeps track of all the \emph{instances} of
+\code{'a} we have created so far in its \code{enum} field. Built-in types such
+as \code{int} do not belong to the set of types whose invariants we wish to
+check. For such types, we provide a \code{fresh} function that generates an
+instance different from all that we have generated so far.
 
 From the point of view of the client code, all we can do is combine
 \code{add} and \code{empty} to generate new instances. \arti, as a fake client,
@@ -93,7 +93,7 @@ type (_,_) fn =
 
 (* Helpers for creating [fn]'s. *)
 let (@->) ty fd = Fun (ty,fd)
-let returning ty = Constant ty
+let returning ty = Ret ty
 \end{ocamlcode}
 %
 The \code{Ret} case describes a constant value, which has type \code{'a} and
@@ -116,8 +116,8 @@ let rec eval : type a b. (a,b) fn -> a -> b list =
 
 let rec codom : type a b. (a,b) fn -> b ty =
   function
-    | Fun (_,fd) -> codom fd
     | Ret ty -> ty
+    | Fun (_,fd) -> codom fd
 \end{ocamlcode}
 %
 The \code{eval} function is central: taking a function descriptor \code{fd}, it
@@ -131,6 +131,7 @@ descriptor associated to the return value (the codomain) of an \code{fn}.
 Using the two functions above, it then becomes trivial to generate new instances
 of \code{'b}.
 %
+% The function below doesn't need the special GADT syntax. Go figure.
 \begin{ocamlcode}
 let use (fd: ('a, 'b) fn) (f: 'a) =
   let prod = eval fd f in
