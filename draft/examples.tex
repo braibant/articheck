@@ -50,7 +50,40 @@ recombinations, to finally output:
     ... and put the error message here
 \end{verbatim}
 
-\subsection{Binary Decision Diagrams (BDDs)}
+\subsection{Binary Decision Diagrams}
 
-% TODO: do we check the invariant for maximal sharing?
-% TODO: does \arti detect other potential mistakes?
+Binary Decision Diagrams (BDDs) represent trees for deciding logical formulas. The
+defining characteristic of BDDs is that they enforce \emph{maximal sharing}:
+wherever two structurally equal sub-formulas appear, they are guaranteed to
+refer to the same object in memory. A consequence is that performing large
+numbers of function calls does not necessarily means using substantially more
+memory: it may very well be the case that significant sharing occurs.
+
+We mentioned earlier that our strategy for external testing amounted, in
+essence, to representing series of well-typed function calls in the simply typed
+lambda calculus using in GADT. If we only did that and skipped section
+\sref{sec:representation}, externally-testing BDDs would be infeasible, as we
+would end up representing a huge number of function calls in memory.
+
+Conversely, with the design we exposed earlier, we merely record new instances
+as they appear without holding the entire set of potential function calls in
+memory. This allows for an efficient, non-redundant generation of test cases
+(instances).
+
+\subsection{AVL trees}
+
+AVL trees are a classic of programming interviews; many a graduate
+student has been scared by the mere mention of them. It turns out that tenured
+professors \emph{should} be scared too: the OCaml implementation of maps,
+written using AVL trees by a respectable researcher, contained a bug that went
+unnoticed for more than ten years.
+% TODO fact checking
+The bug was discovered when another enthusiastic researcher set out to formalize
+the said library in Coq. The bug was fixed, and all was well. Out of curiosity,
+we decided to run \arti on the faulty version of the library.
+% TODO wrote that in anticipation, so fix afterwards KTHXBYE
+After registering only four functions with \arti, the bug was correctly
+identified by our library, with arguably less pain than the full Coq
+formalization required.
+
+
