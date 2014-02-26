@@ -151,9 +151,9 @@ module RBT : RBT  = struct
       | Some (t, frame) -> Some (t, frame::zip)
 end
 
-let rbt_t = atom (Ty.declare () : int RBT.t ty)
+let rbt_t = atom (Ty.declare ~ident:"rbt" () : int RBT.t ty)
 let int_t =
-  let ty : int ty = Ty.declare ~fresh:(fun _ -> Random.int 1000) () in
+  let ty : int ty = Ty.declare ~ident:"int" ~fresh:(fun _ -> Random.int 1000) () in
   Ty.populate 5 ty;
   atom ty
 
@@ -170,18 +170,19 @@ let () =
   assert (counter_example "rbt balanced" rbt_t RBT.is_balanced = None);
   ()
 
-let unit_t = atom (Ty.declare ~initial:[()] () : unit ty)
-let dir_t = atom (Ty.declare ~initial:RBT.([Left; Right]) () : RBT.direction ty)
-let ptr_t = atom (Ty.declare () : int RBT.pointer ty)
+let unit_t = atom (Ty.declare ~ident:"unit" ~initial:[()] () : unit ty)
+let dir_t =
+  let ident, initial = "dir", RBT.([Left; Right]) in
+  atom (Ty.declare ~ident ~initial () : RBT.direction ty)
+let ptr_t = atom (Ty.declare ~ident:"ptr" () : int RBT.pointer ty)
 
-(* (* if the "pointer" definition was public, one could define *)
-let zip_t = atom (Ty.declare () : int RBT.zipper ty)
-let ptr_t
-    : int RBT.pointer positive = rbt_t *@ zip_t
-   (* this would break well-formedness,
-      as it would allow to replace a subtree at the pointed position
-      by a different subtree of arbitrary size, breaking the black-height invariant *)
-*)
+(* if the "pointer" definition was public, one could define *)
+(* let zip_t = atom (Ty.declare ~ident:"zip" () : int RBT.zipper ty) *)
+(* let ptr_t *)
+(*     : int RBT.pointer positive = rbt_t *@ zip_t *)
+(*    (\* this would break well-formedness, *)
+(*       as it would allow to replace a subtree at the pointed position *)
+(*       by a different subtree of arbitrary size, breaking the black-height invariant *\) *)
 
 let ptropt_t = option ptr_t
 

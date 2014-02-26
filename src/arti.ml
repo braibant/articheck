@@ -361,5 +361,5 @@ let to_option = function
 let option_bij : ('a structural_option, 'a option) bijection =
   (to_option, of_option)
 
-let unit = atom (Ty.declare ~initial:[()] () : unit ty)
+let unit = atom (Ty.declare ~ident:"unit" ~initial:[()] () : unit ty)
 let option p = bij (p +@ unit) option_bij
