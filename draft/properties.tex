@@ -1,1 +1,69 @@
 \section{Expressing correctness properties}
+
+The \code{SIList} example uses \code{check} function that runs on top
+of the simplest possible testing function, called
+\code{counter\_example}:
+%
+\begin{ocamlcode}
+  val counter_example :
+    'a positive -> ('a -> bool) -> 'a option
+\end{ocamlcode}
+%
+This functions takes the description of some (positive) datatype
+\code{'a}, iterates on the produced values at this type, and checks
+that a predicate \code{'a -> bool} holds, or returns
+a counter-example. At a more abstract level, this means that we are
+checking a property of the form \[ \forall (x \in t), T(x) \] where
+$T$ is simply a boolean expression. Using product types allows to
+simulate multiple quantifiers; for example, the typical formula of
+association maps
+%
+\[\begin{array}{l}
+  \forall (m \in \mathtt{map}(K,V))\ \forall (k \in K)\ \forall (v \in V),\\
+  \qquad \mathtt{lookup(k,insert(k,v,m)) = v}
+\end{array}\]
+%
+can be expressed as
+%
+\begin{ocamlcode}
+  let lookup_insert_prop (k, v, m) =
+    lookup k (insert k v m) = v
+  let () = assert (None =
+    let kvm_t = k_t *@ v_t *@ map_t in
+    counter_example kvm_t lookup_insert_prop)
+\end{ocamlcode}
+
+It is then natural to wonder what is a good language to describe the
+correctness properties we want to check. We have instinctively used
+first-order logic, and are able to express formulas with prenex
+universal quantifiers followed by a quantifier-free formula; the
+ability to generate random elements gives a ``test semantics'' to
+(prenex) universal quantifiers. Can we do better? In particular, can
+we capture the full language of first-order logic, as a reasonable
+description language for tests in a practical framework?
+
+There are various reasons why it is difficult to support full
+first-order logic as a specification language for tests using only
+random generation -- as opposed to more structured verification
+approaches such as SMT solvers or finite model
+finders~\cite{nitpick}. For example, it is awkward to give a test
+semantics to an existential formula $\exists(x \in t). T(x)$. The user
+expects a test to tell you little if it returns ``yes'', but always
+have found a bug (with an exercising input) if it returns ``no''. If
+you generate a bounded number of elements of $t$ randomly, the fact
+that none satisfy $T$ may not indicate a bug, simply that you haven't
+tested the good elements. Trying to distinguish absolute (positive or
+negative) results from probabilistic results opens a world of
+complexity that we chose not to explore.
+
+Surprisingly to us, there does not seem to be a consensus in the
+random testing literature on an expressive, well-defined subset of
+first-order logic. The simplest subset one directly thinks of is the
+formulas of the form
+\[ \forall x_1 \dots x_n, P(x_1, \dots, x_n) \Rightarrow T(x_1, \dots,
+x_n) \] where $P(x_1, \dots, x_n)$ (the \emph{precondition}) and
+$T(x_1, \dots, x_n)$ (the \emph{test}) are both quantifier-free
+formulas. The reason to give a specific status to this implication is
+to count differently tests that succeeded because the precondition was
+not verified, which often bring little confidence and should not be
+counted as successes.
