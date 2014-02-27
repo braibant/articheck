@@ -1,29 +1,28 @@
 \section{Expressing correctness properties}
 
-The \code{SIList} example uses \code{check} function that runs on top
-of the simplest possible testing function, called
-\code{counter\_example}:
+We mentioned in the \code{SIList} example the \code{check} function; among other
+things, what it does is call \code{counter\_example}:
 %
 \begin{ocamlcode}
-  val counter_example :
-    'a positive -> ('a -> bool) -> 'a option
+val counter_example: 'a pos -> ('a -> bool) -> 'a option
 \end{ocamlcode}
 %
-This functions takes the description of some (positive) datatype
-\code{'a}, iterates on the produced values at this type, and checks
-that a predicate \code{'a -> bool} holds, or returns
-a counter-example. At a more abstract level, this means that we are
+The function takes a description of some (positive) datatype
+\code{'a}, iterates on the generated instances of this type and checks
+that a predicate \code{'a -> bool} holds for all instances, or returns
+a counter-example otherwise. At a more abstract level, this means that we are
 checking a property of the form \[ \forall (x \in t), T(x) \] where
-$T$ is simply a boolean expression. Using product types allows to
-simulate multiple quantifiers; for example, the typical formula of
-association maps
+$T(x)$ is simply a boolean expression.
+Multiple quantifiers can be simulated through the use of product types, such as
+in the typical formula of association maps:
 %
 \[\begin{array}{l}
   \forall (m \in \mathtt{map}(K,V))\ \forall (k \in K)\ \forall (v \in V),\\
   \qquad \mathtt{lookup(k,insert(k,v,m)) = v}
 \end{array}\]
 %
-can be expressed as
+which can be expressed as follows (where \code{*@} is the operator for creating
+product type descriptors):
 %
 \begin{ocamlcode}
   let lookup_insert_prop (k, v, m) =
@@ -33,37 +32,46 @@ can be expressed as
     counter_example kvm_t lookup_insert_prop)
 \end{ocamlcode}
 
-It is then natural to wonder what is a good language to describe the
-correctness properties we want to check. We have instinctively used
-first-order logic, and are able to express formulas with prenex
-universal quantifiers followed by a quantifier-free formula; the
-ability to generate random elements gives a ``test semantics'' to
-(prenex) universal quantifiers. Can we do better? In particular, can
-we capture the full language of first-order logic, as a reasonable
-description language for tests in a practical framework?
+One then naturally wonders what a good language would be for describing the
+correctness properties we wish to check. In the example above, we naturally
+veered towards first-order logic, so as to express formulas with only prenex,
+universal quantification. The universal quantifiers are to be understood with a
+``test semantics'', that is, they mean to quantify over all the random instances
+we generated.
+%
+Can we do better? In particular, can we capture the full language of first-order
+logic, as a reasonable test \emph{description language} for a practical
+framework?
 
-There are various reasons why it is difficult to support full
-first-order logic as a specification language for tests using only
-random generation -- as opposed to more structured verification
-approaches such as SMT solvers or finite model
-finders~\cite{nitpick}. For example, it is awkward to give a test
-semantics to an existential formula $\exists(x \in t). T(x)$. The user
-expects a test to tell you little if it returns ``yes'', but always
-have found a bug (with an exercising input) if it returns ``no''. If
-you generate a bounded number of elements of $t$ randomly, the fact
-that none satisfy $T$ may not indicate a bug, simply that you haven't
-tested the good elements. Trying to distinguish absolute (positive or
-negative) results from probabilistic results opens a world of
-complexity that we chose not to explore.
+It feels natural to use first-order logic as a specification language in the
+context of structured verification, such as with SMT solvers or a finite
+% TODO \cite
+model~\cite{nitpick}.
+However, supporting full first-order logic as a specification language for
+randomly-generated tests is hard for various reasons. 
 
-Surprisingly to us, there does not seem to be a consensus in the
-random testing literature on an expressive, well-defined subset of
-first-order logic. The simplest subset one directly thinks of is the
-formulas of the form
+For instance, giving ``test semantics'' to an existentially-quantified formula
+such as $\exists(x \in t). T(x)$ is awkward. Intuitively, there is not much
+meaning to the formula. The number of generated instances is finite; that none
+satisfies $T$ may not indicate a bug, but rather that the wrong elements have
+been tested for the property. Conversely, finding a counter-example to a
+universally-quantified formula \emph{always} means that a bug has been found.
+%
+Trying to distinguish absolute (positive or negative) results from probabilistic
+results opens a world of complexity that we chose not to explore.
+
+Surprisingly enough, there does not seem to be a consensus in the
+literature about random testing for an expressive, well-defined subset of
+first-order logic. The simplest subset one directly thinks of is
+formulas of the form:
 \[ \forall x_1 \dots x_n, P(x_1, \dots, x_n) \Rightarrow T(x_1, \dots,
 x_n) \] where $P(x_1, \dots, x_n)$ (the \emph{precondition}) and
 $T(x_1, \dots, x_n)$ (the \emph{test}) are both quantifier-free
-formulas. The reason to give a specific status to this implication is
-to count differently tests that succeeded because the precondition was
-not verified, which often bring little confidence and should not be
-counted as successes.
+formulas.
+
+The reason this implication is given a specific status is to make it possible to
+distinguish tests that succeeded because the \emph{test} was effectively
+successful from tests that succeeded because the \emph{precondition} was not
+met. The latter are ``aborted'' tests that bring no significant value, and
+should thus be disregarded. In \arti, we chose to restrict ourselves to this
+last form of formulas.
