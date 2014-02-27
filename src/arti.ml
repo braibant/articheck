@@ -145,7 +145,7 @@ module Eval = struct
   let rec iter:
   type a.  (a -> unit) -> a set -> unit = fun f s ->
     begin match s with
-      | Set ps -> ps.Bag.iter f
+      | Set ps -> ps.Bag.fold (fun elem () -> f elem) ()
       | Union (pa,pb) ->
         iter (fun a -> f (L a)) pa;
         iter (fun b -> f (R b)) pb;

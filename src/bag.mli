@@ -2,7 +2,7 @@
     elements *)
 type 'a t = {
   insert : 'a -> 'a t;
-  iter : ('a -> unit) -> unit;
+  fold : 'b . ('a -> 'b -> 'b) -> 'b -> 'b;
   cardinal : unit -> int;
 }
 

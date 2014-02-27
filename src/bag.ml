@@ -2,7 +2,7 @@ module type S =
 sig
   type 'a t
   val insert : 'a -> 'a t -> 'a t
-  val iter : ('a -> unit) -> 'a t -> unit
+  val fold : ('a -> 'b -> 'b) -> 'a t -> 'b -> 'b
   val cardinal : 'a t -> int
 end
 
@@ -14,13 +14,12 @@ module Parray : sig
   type 'a t
   val create : int -> 'a -> 'a t
   val set : 'a t -> int -> 'a -> 'a t
-  val iter : ('a -> unit) -> 'a t -> unit
+  val fold : ('a -> 'b -> 'b) -> 'a t -> 'b -> 'b
 end = struct
   type 'a t = 'a data ref
   and 'a data =
   | Array of 'a array
   | Diff of int * 'a * 'a t
-
 
   let create n v = ref (Array (Array.create n v))
 
@@ -59,9 +58,7 @@ end = struct
     reroot t;
     match !t with Array a -> f a | Diff _ -> assert false
 
-
-  let iter f t = impure (Array.iter f) t
-
+  let fold f t init  = impure (Array.fold_right f) t init
 end
 
 module Sample : sig
@@ -94,9 +91,9 @@ end = struct
           {elements; count = v.count + 1; size = v.size}
         else {v with count = v.count + 1}
 
-  let iter f v = match v.elements with
-    | None -> ()
-    | Some elements -> Parray.iter f elements
+  let fold f v init = match v.elements with
+    | None -> init
+    | Some elements -> Parray.fold f elements init
 
   let cardinal v = min (v.size) (v.count)
 end
@@ -148,13 +145,13 @@ end = struct
           end
       in blacken (insert x n)
 
-    let rec iter f = function
-      | Empty -> ()
+    let rec fold f t state = match t with
+      | Empty -> state
       | Red (l,v,r) | Black (l,v,r) ->
-        iter f l;
-        f v;
-        iter f r
-
+        let state = fold f l state in
+        let state = f v state in
+        let state = fold f r state in
+        state
 
     let rec cardinal = function
       | Empty -> 0
@@ -171,19 +168,19 @@ end = struct
   let create compare = {set= RBT.empty; compare}
   let insert x s = {s with set = RBT.insert s.compare x s.set}
   let cardinal s = RBT.cardinal s.set
-  let iter f s = RBT.iter f s.set
+  let fold f s init = RBT.fold f s.set init
 end
 
 type 'a t = {
   insert : 'a -> 'a t;
-  iter : ('a -> unit) -> unit;
+  fold : 'b . ('a -> 'b -> 'b) -> 'b -> 'b;
   cardinal : unit -> int;
 }
 
 module Pack (Impl : S) = struct
   let rec pack (bag : 'a Impl.t) : 'a t = {
     insert = (fun x -> pack (Impl.insert x bag));
-    iter = (fun f -> Impl.iter f bag);
+    fold = (fun f init -> Impl.fold f bag init);
     cardinal = (fun () -> Impl.cardinal bag);
   }
 end
