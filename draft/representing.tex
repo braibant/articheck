@@ -263,26 +263,26 @@ exploration procedures so that ``interesting'' instances pop up early.
 
 \subsection{Instance generation as a fixed point computation}
 
-The \code{apply}/\code{destruct} combination only demonstrates how to
-generate new instances from one specific element of the signature. We
-need to iterate this recipe on the whole signature, feeding the new
-values obtained to the operators that consume them as input.
+The \code{apply}/\code{destruct} combination only demonstrates how to generate
+new instances from one specific element of the signature. We need to iterate
+this recipe on the whole signature, by feeding the new instances that we
+obtain to other functions that can in turn consume them.
 
-This part of the problem naturally presents itself as a fixpoint
-computation, defined by a system of equations. Equations between
-variables (type descriptors) describe ways of obtaining new instances
-(by applying functions to other type descriptors). Of course, to
-ensure termination we need to put a bound on the number of generated
-instances. This is a classic in algorithms presented as fixpoints
-problems, where the lattice space is artificially made finite to get
-termination.
+This part of the problem naturally presents itself as a fixpoint computation,
+defined by a system of equations. Equations between variables (type descriptors)
+describe ways of obtaining new instances (by applying functions to other type
+descriptors). Of course, to ensure termination, we need to put a bound on the
+number of generated instances. When presenting an algorithm as a fixpoint
+problem, it is indeed a fairly standard technique to make the lattice space
+artificially finite in order to obtain the termination property.
 
 Implementing an efficient fixpoint computation is a \emph{surprisingly
-  interesting} activity, and we are happy to use an off-the-shelf
-fixpoint library, François Pottier's \code{Fix}%TODO href?
-, to perform the work for us. \code{Fix} can be summarized by
-the signature below, obtained from user-defined instantiations of the
-types \code{variable} and \code{property}.
+interesting} activity, and we are happy to use an off-the-shelf fixpoint
+library, François Pottier's \code{Fix},
+%TODO href?
+to perform the work for us. \code{Fix} can be summarized by the signature
+below, obtained from user-defined instantiations of the types \code{variable}
+and \code{property}.
 %
 \begin{ocamlcode}
 module Fix = sig
@@ -295,22 +295,20 @@ end
 \end{ocamlcode}
 %
 % TODO \cite
-A system of equations maps a variable to a right-hand side.  Each
-right-hand side can be evaluated by providing a valuation so as to
-obtain a property. Valuations map variables to properties. Solving
-a system of equations amounts to calling the \code{lfp} function
-which, given a set of equations, returns the corresponding valuation.
+A system of equations maps a variable to a right-hand side.  Each right-hand
+side can be evaluated by providing a valuation so as to obtain a property.
+Valuations map variables to properties. Solving a system of equations amounts to
+calling the \code{lfp} function which, given a set of equations, returns the
+corresponding valuation.
 
-A perhaps tempting way to fit in this setting would be to define
-variables to be our \code{'a ty} (type descriptor) and properties to
-be \code{'a list}s (the instances we have built so far); the equations
-derived from any signature would then describe ways of obtaining new
-instances by applying any function of the signature. This
-doesn't work as is: since there will be multiple values of \code{'a}
-(we generate instances of different types simultaneously), type
-mismatches are to be expected. One could, after all, use yet another
-GADT and hide the \code{'a} type parameter behind an existential
-variable.
+A perhaps tempting way to fit in this setting would be to define variables to be
+our \code{'a ty} (type descriptor) and properties to be \code{'a list}s (the
+instances we have built so far); the equations derived from any signature would
+then describe ways of obtaining new instances by applying any function of the
+signature. This doesn't work as is: since there will be multiple values of
+\code{'a} (we generate instances of different types simultaneously), type
+mismatches are to be expected. One could, after all, use yet another GADT and
+hide the \code{'a} type parameter behind an existential variable.
 %
 \begin{ocamlcode}
   type variable = Atom: 'a ty -> variable
@@ -320,18 +318,18 @@ variable.
 The problem is that there is no way to statically prove that having an
 \code{'a var} named \code{x}, calling \code{valuation x} yields an
 \code{'a property} with a matching type parameter. This is precisely
-where the mutable state in the \code{'a ty} type comes handy: even it
-is only passed as input to the system of equations, we can also use it
-to store the output; the \code{property} type needs not mention the
-type variable \code{'a} anymore, which removes any typing
-difficulty -- or need to change \code{Fix}'s interface.
+where the mutable state in the \code{'a ty} type comes handy: even though it is
+only used as the \emph{input} parameter for the system of equations, we
+``cheat'' and use its mutable \code{enum} field to store the output. That way,
+the \code{property} type needs not mention the type variable \code{'a} anymore,
+thus removing any typing difficulty -- or the need to change the interface of
+\code{Fix}.
 
-We still need the \code{property} type to be a rich enough lattice to
-let \code{Fix} decides when to stop iterating: it should come with
-equality- and maximality-checking functions, used by \code{Fix} to
-detect that the fixpoint is reached. The solution is to define
-\code{property} as the number of instances generated so far (and the
-bound we have chosen in advance):
+We still, however, need the \code{property} type to be a rich enough lattice to
+let \code{Fix} decide when to stop iterating: it should come with equality- and
+maximality-checking functions, used by \code{Fix} to detect that the fixpoint is
+reached. The solution is to define \code{property} as the number of instances
+generated so far along with the bound we have chosen in advance:
 %
 \begin{ocamlcode}
   type variable = Atom : 'a ty -> variable
