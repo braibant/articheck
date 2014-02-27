@@ -1,0 +1,44 @@
+\section{Conclusion}
+
+We have presented the design of \arti, a novel library that allows one to check
+the invariants of a module signature by simulating user interaction with the
+module. \arti behaves like a fake client: it calls functions, constructs and
+destructs products or sums, and for each element check that the invariants are
+verified. The key to performing this in a generic, abstract manner relies on
+GADTs, which abstract the different types that may be manipulated into a common
+representation.
+
+We identified various performance problems that arise. The library handles them
+via a symbolic representation of types in combination with a little bit of
+mutable state to avoid handling large, intermediary results in memory.
+
+The result is a self-contained library that wraps the core concepts of
+\emph{external testing} and offers clients a cheap and efficient way to test
+their programs. The library, for instance, successfully detects infamous issues
+such as the AVL re-balancing issue in the standard library of OCaml, with a much
+lower cost than a complete Coq proof of the module.
+
+While the library exposes the essence of \emph{external testing} and has already
+proven worthwhile, we believe there is potential for improvement and expansion
+into a fully-fledged testing library.
+
+% TODO: related work starts here
+Bernardy et al.~\cite{DBLP:conf/esop/BernardyJC10} describe a
+systematic way of reducing the testing of polymorphic functions to the
+testing of specific monomorphic instances of these functions.
+%
+Given a polymorphic property, the correctness of the reduced
+(monomorphic) property entails the correctness of all other
+instanciations. This yields a significant reduction in the necessary
+test cases.
+% They rely on a version of parametricity that does not hold in ML in
+% all its generality. For instance, one should not use side effects.
+%
+They informally argue that their technique is efficient compared to
+the standard praxis of substituting \texttt{int} for polymorphic
+types.
+%
+Note however that both solutions to the problem of testing polymorphic
+functions must be applied at the meta-level. That is, the user has to
+pick the right instanciation of polymorphic type variables; this
+cannot be done automatically inside the host language.
