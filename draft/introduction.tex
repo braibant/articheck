@@ -39,10 +39,12 @@ re-implementing a series of random additions and deletions, which are precisely
 the function that the code to be tested for exports. What if the testing
 framework could, by itself, combine functions exported by the module we wish to
 test, in order to build instances of the desired type? As long as the the module
-exports a correctness predicate, all the testing library needs is functions
+exports its correctness properties, all the testing library needs is functions
 that \emph{return} $t$'s.
 
-In the present document, we describe a library that does precisely that, dubbed
-\arti. The library is written in OCaml. While \qcheck uses a
-combination internal testing and type classes, our library performs external
-testing and relies on GADTs.
+In the present document, we describe a library that does precisely
+that, dubbed \arti. The library is written in OCaml. While \qcheck
+uses type-classes as a host language feature to conduct value
+generation, we show how to implement the proof search in library
+code -- while remaining both type-safe and generic over the
+tested interfaces, thanks to GADTs.

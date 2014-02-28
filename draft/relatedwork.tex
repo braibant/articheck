@@ -1,22 +1,122 @@
 \section{Related and Future Work}
 
-% TODO: related work starts here
-Bernardy et al.~\cite{DBLP:conf/esop/BernardyJC10} describe a
-systematic way of reducing the testing of polymorphic functions to the
-testing of specific monomorphic instances of these functions.
-%
-Given a polymorphic property, the correctness of the reduced
-(monomorphic) property entails the correctness of all other
-instanciations. This yields a significant reduction in the necessary
-test cases.
-% They rely on a version of parametricity that does not hold in ML in
-% all its generality. For instance, one should not use side effects.
-%
-They informally argue that their technique is efficient compared to
-the standard praxis of substituting \texttt{int} for polymorphic
-types.
-%
-Note however that both solutions to the problem of testing polymorphic
-functions must be applied at the meta-level. That is, the user has to
-pick the right instanciation of polymorphic type variables; this
-cannot be done automatically inside the host language.
+\paragraph{Genericity of value generation}
+
+The idea of generating random sequences of operations instead of
+random internal values is not novel; for example, \qcheck was used as
+is to test imperative programs~\cite{testing-monadic-code}, by
+generating random values of an AST of operations, paired to a monadic
+interpreter of those syntactic descriptions. However, those examples
+in the literature only involve operations for a single return type,
+corresponding to the return type of the AST evaluation function. To
+integrate operations of distinct return types in the same interface
+description, one needs GADTs or some other form of type-level
+reasoning.
+
+When multiple value types are involved, we found it helpful to think
+of well-typed value generation as term/proof search. Our well-typed
+rule to generate random values at type $\tau$ from a function at type
+$\sigma \to \tau$ and random values at type $\sigma$ could be
+expressed, in term of \qcheck \code{Arbitrary} instances, as
+a deduction rule of the form \code{instance Arbitrary b, Arbitrary
+  (a -> b) => Arbitrary b where ...}; but Haskell's type-class
+mechanism would not allow this instance deduction rule, which does not
+respect its restrictions for principled, coherent instance
+elaboration. Type classes are a helpful and convenient host-language
+mechanism, but they are designed for code inference rather than
+arbitrary proof search. Our library-level implementation of well-typed
+proof search using GADTs gives us more freedom, and is the central
+idea of \code{ArtiCheck}.
+
+It is of course possible to see chaining of function/method calls as
+a metaprogramming problem, and generate a reified description of those
+calls, to interpret through an external script or reflection/JIT
+capability, as done in the testing tool Randoop~\cite{randoop}. Doing
+the generation as a richly-typed host language library gives us
+stronger type safety guarantees: even if our value generator is buggy,
+it will never compose operations in a type-incorrect way.
+
+\paragraph{Testing of higher-order or polymorphic interfaces}
+
+The type description language we use captures a first-order subset of
+the simply-typed lambda-calculus. A natural question is whether it
+would be possible to support random function generation -- embed
+negative types into positives. Generating a function of type $\sigma
+\to \tau$ would entail adding its argument to the base of known value
+at type $\sigma$, and generating random values at type $\tau$ using
+the operations of the signature. This may result in genuinely new
+values if the argument passed is not reachable otherwise; consider
+a signature with two abstract types \code{t, u} and a single operation
+of type \code{(t -> t) -> u}: the only way to produce a \code{u} is to
+generate the identity function. \qcheck function generation support
+use the function argument as additional entropy, but does not use the
+argument otherwise, and could not synthesize the identity function here.
+
+It would also be interesting to support representation of polymorphic
+operations; we currently only describe monomorphic
+instantiations. Bernardy, Jansson and
+Claessen~\cite{testing-polymorphic-properties} have proposed
+a parametricity-based technique to derive specific monomorphic
+instances for type arguments, that also reduces the search space of
+values to be tested. Supporting this technique would be a great asset
+of a testing library, but it is not at all obvious how their
+pen-and-paper derivation could be automatized -- and even less so
+whether this can be done internally, in the host language of the
+implementations being tested.
+
+\paragraph{Bottom-up or top-down generation}
+
+We have presented the \code{ArtiCheck} implementation as a bottom-up
+process: from a set of already-discovered values at the types of
+interest, we use the constructors of the interface to produce new
+values. In contrast, most random checking tools present generation in
+a top-down fashion: pick the head constructor of the data value, then
+we'll generate its subcomponents recursively. One notable exception is
+SmallCheck~\cite{smallcheck}, which performs exhaustive testing for
+values of bounded depth.
+
+The distinction is however blurred by several factors. Our
+demand-driven computation of fixpoints, implemented by the Fix
+library, will result in more elements generated for the types most
+useful to the properties we wish to check, giving bottom-up search
+a top-down flavor. Relatedly, SmallCheck has a Lazy SmallCheck variant
+that uses laziness (demand-driven computation) to avoid fleshing out
+value parts that are not inspected by the property being tested.
+
+Furthermore, the genericity of our high-level interface makes
+\code{Articheck} amenable to change in the generation technique; we
+could implement direct top-down search without changing the signature
+description language, or most parts of the library interface.
+
+\paragraph{Richer property languages}
+
+We discussed in Section~\ref{sec:properties} the difficulty of
+isolating an expressive fragment of first-order logic as a property
+language that could be given a realizable testing semantics. As it
+does exhaustive search (up to a bound), SmallCheck is able to give
+a non-surprising semantics to existential quantification. As we let
+user control for each interface datatype whether an exhaustive
+collection or random reservoir sampling should be used, we could
+support existential on exhaustively collected types only.
+
+Otherwise, the work that stands out by supporting full-fledged
+first-order logic for random checking is Blanchette and Nipkow
+implementation of QuickCheck for Isabelle~\cite{quicheck-isabelle}. In
+the Isabelle proof assistant, it is common to define computations as
+inductive relations/predicates that can be given a (potentially
+non-deterministic) functional mode; instead of directly turning
+correctness formulas into testing programs, they translate formulas
+into inductive datatypes, which are then given a computational
+interpretation.
+
+This is remarkable as it not only allows them to support a rich
+specification language, but also gives a principled explanation for
+the ad-hoc semantics of preconditions in testing frameworks (a failing
+precondition does not count as a passed test); instead of seeing
+a precondition \code{P[x]} as returning a boolean from
+a randomly-generated \code{x}, they choose a mode assignment that
+inverts it into a logic program generating the \code{x}s accepted by
+the precondition. This gives a logic-based justification to various
+heuristics used in other works to generate random values more likely
+to pass the precondition, either domain-specific~\cite{foo} or
+SAT-based~\cite{bar}.
