@@ -91,7 +91,8 @@ module Ty = struct
       ?(initial=[])
       ?(ident="<abstract>")
       ?fresh
-      ?(bag = Bag.sample ~size:1000 ~to_generate:10_000)
+      ?(size=1000)
+      ?(bag = Bag.sample ~size ~to_generate:100_000)
       ()
       : 'a ty =
     {

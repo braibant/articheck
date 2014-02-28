@@ -131,10 +131,10 @@ end
 
 open Arti
 
-let set_t = atom (Ty.declare () : Set.t ty)
+let set_t = atom (Ty.declare ~size:1500 () : Set.t ty)
 let int_t =
-  let ty : int ty = Ty.declare ~fresh:(fun _ -> Random.int 1000) () in
-  Ty.populate 5 ty;
+  let ty : int ty = Ty.declare ~fresh:(fun _ -> Random.int 100000) () in
+  Ty.populate 1000 ty;
   atom ty
 
 
