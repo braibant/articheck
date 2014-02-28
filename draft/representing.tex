@@ -275,8 +275,7 @@ artificially finite in order to obtain the termination property.
 
 Implementing an efficient fixpoint computation is a \emph{surprisingly
 interesting} activity, and we are happy to use an off-the-shelf fixpoint
-library, François Pottier's \code{Fix},
-%TODO href?
+library, François Pottier's \code{Fix}~\cite{fix},
 to perform the work for us. \code{Fix} can be summarized by the signature
 below, obtained from user-defined instantiations of the types \code{variable}
 and \code{property}.
@@ -291,7 +290,6 @@ module Fix = sig
 end
 \end{ocamlcode}
 %
-% TODO \cite
 A system of equations maps a variable to a right-hand side.  Each right-hand
 side can be evaluated by providing a valuation so as to obtain a property.
 Valuations map variables to properties. Solving a system of equations amounts to
