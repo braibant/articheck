@@ -62,9 +62,8 @@ a parametricity-based technique to derive specific monomorphic
 instances for type arguments, which also reduces the search space of
 values to be tested. Supporting this technique would be a great asset
 of a testing library, but it is definitely not obvious how their
-pen-and-paper derivation could be automatized -- and even less so
-whether this can be done internally, in the host language of the
-implementations being tested.
+pen-and-paper derivation could be automatized, especially as a library
+function.
 
 \paragraph{Bottom-up or top-down generation}
 
@@ -77,13 +76,14 @@ generate its subcomponents recursively. One notable exception is
 SmallCheck~\cite{DBLP:conf/haskell/RuncimanNL08}, which performs
 exhaustive testing for values of bounded depth.
 
-The distinction is however blurred by several factors. Our
-demand-driven computation of fixpoints, implemented by the Fix
-library, will result in more elements generated for the types most
-useful to the properties we wish to check, giving bottom-up search
-a top-down flavor. Relatedly, SmallCheck has a Lazy SmallCheck variant
-that uses laziness (demand-driven computation) to avoid fleshing out
-value parts that are not inspected by the property being tested.
+The distinction is however blurred by several factors. Fix implements
+demand-driven computation of fixpoints: if you request elements at
+type \code{u} and there is an operation \code{t -> u}, it will
+recursively populate values at type \code{t}, giving the actual
+operational behavior of the generator a top-down flavor. Relatedly,
+SmallCheck has a Lazy SmallCheck variant that uses laziness
+(demand-driven computation) to avoid fleshing out value parts that are
+not inspected by the property being tested.
 
 Furthermore, the genericity of our high-level interface makes
 \code{Articheck} amenable to a change in the generation technique; we
