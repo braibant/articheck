@@ -21,7 +21,7 @@ module Ty :
       ?initial:'a list ->
       ?ident:string ->
       ?fresh:('a Bag.t -> 'a) ->
-      ?size:int ->
+      ?required:int ->
       ?bag:'a Bag.t ->
       unit -> 'a ty
     val populate : int -> 'a ty -> unit

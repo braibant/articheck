@@ -10,7 +10,7 @@ type ident = string
 
 (** Internally, a type descriptor is made up of:
     - a unique identifier
-    - a size annotation: the maximum number of elements of this type that we are going to build;
+    - a size annotation: the required number of elements of this type that we are going to build;
     - an enumeration of the inhabitants of the type
     - a function that generates a new ['a] different from all the
     ['a]s we have constructed so far; this function is only available
@@ -19,7 +19,7 @@ type ident = string
 type 'a ty =
     {
       uid: int;
-      size: int;
+      required: int;
       ident: string;
       mutable enum: 'a Bag.t;
       fresh: ('a Bag.t -> 'a) option;
@@ -91,14 +91,14 @@ module Ty = struct
       ?(initial=[])
       ?(ident="<abstract>")
       ?fresh
-      ?(size=1000)
-      ?(bag = Bag.sample ~size ~to_generate:100_000)
+      ?(required=100_000)
+      ?(bag = Bag.hashset ~size:200 ~hash:(Hashtbl.hash))
       ()
       : 'a ty =
     {
       enum = List.fold_left (fun acc x -> acc.Bag.insert x) bag initial;
       uid = gensym ();
-      size = 1000;
+      required;
       fresh;
       ident
     }
@@ -302,6 +302,7 @@ struct
   let populate sig_ =
     let eqs : F.variable -> (F.valuation -> F.property) =
       fun atom env ->
+	Printf.printf "-%!";
         (* use the proper constructors *)
         List.iter (fun (_, Elem (fd, f)) ->
           let inputs = neg_atoms fd in
@@ -316,7 +317,7 @@ struct
         let (Atom ty) = atom in
         Ty.populate 10 ty;
         { produced = Ty.cardinal ty;
-          required = ty.size }
+          required = ty.required }
     in F.lfp eqs
 
 

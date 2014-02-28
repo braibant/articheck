@@ -13,13 +13,16 @@ end
 module Parray : sig
   type 'a t
   val create : int -> 'a -> 'a t
+  val length : 'a t -> int
   val set : 'a t -> int -> 'a -> 'a t
+  val get : 'a t -> int -> 'a
   val fold : ('a -> 'b -> 'b) -> 'a t -> 'b -> 'b
 end = struct
   type 'a t = 'a data ref
   and 'a data =
   | Array of 'a array
   | Diff of int * 'a * 'a t
+
 
   let create n v = ref (Array (Array.create n v))
 
@@ -36,7 +39,13 @@ end = struct
 
   let reroot t = rerootk t (fun () -> ())
 
-  let set t i v =
+  let length v =
+    reroot v;
+    match !v with
+	Diff _ -> assert false
+      | Array v -> Array.length v
+
+    let set t i v =
     reroot t;
     match !t with
     | Array a as n ->
@@ -52,6 +61,12 @@ end = struct
     | Diff _ ->
       assert false
 
+  let get t i =
+    reroot t;
+    match !t with
+      | Diff _ -> assert false
+      | Array a -> a.(i)
+
   (* wrappers to apply an impure function from Array to a persistent
      array *)
   let impure f t =
@@ -63,7 +78,7 @@ end
 
 module Sample : sig
   include S
-  val create : size:int -> to_generate:int -> 'a t
+  val create : size:int -> 'a t
 end = struct
 
   (* We need three values here:
@@ -76,10 +91,9 @@ end = struct
       elements: 'a Parray.t option;
       size  : int;
       generated : int;
-      to_generate : int
     }
 
-  let create ~size ~to_generate = {elements = None; generated = 0; size; to_generate}
+  let create ~size  = {elements = None; generated = 0; size}
 
   let insert e v =
     match v.elements with
@@ -104,6 +118,74 @@ end = struct
   let cardinal v = v.generated
 end
 
+
+(* ------------------------------------------------------------------------ *)
+
+module HashSet : sig
+  include S
+  val create: int -> ('a -> int) -> 'a t
+end
+=
+struct
+  (* module Bucket = struct *)
+  (*   let size = 5 *)
+
+  (*   type 'a bucket = *)
+  (* 	{ elements: 'a Parray.t; *)
+  (* 	  head: int *)
+  (* 	} *)
+  (*   and 'a t = 'a bucket option *)
+
+  (*   let add e = function *)
+  (*     | None -> Some {elements = Parray.create size e; head = 0} *)
+  (*     | Some v -> *)
+  (* 	Some { *)
+  (* 	  elements = Parray.set v.elements v.head e; *)
+  (* 	  head = (v.head + 1) mod size *)
+  (* 	} *)
+
+  (*   let fold f t acc = match t with *)
+  (*     | None -> acc *)
+  (*     | Some v ->  Parray.fold f v.elements acc *)
+
+  (*   let empty : 'a t = None *)
+  (* end *)
+
+  module Bucket = struct
+    type 'a t = 'a option
+
+    let add e _ = Some e
+
+    let fold f t acc = match t with | None -> acc | Some e -> f e acc
+
+    let empty = None
+  end
+  type 'a t =
+      {
+	elements: 'a Bucket.t Parray.t;
+	hash: 'a -> int;
+	produced: int
+      }
+
+  let insert e t =
+    let length = Parray.length t.elements in
+    let n = (t.hash e land max_int) mod length in
+    let bucket = Parray.get t.elements n  in
+    let bucket = Bucket.add e bucket in
+    {t with elements = Parray.set t.elements n bucket; produced = t.produced + 1}
+
+  let fold f t acc =
+    Parray.fold (fun bucket acc -> Bucket.fold f bucket acc) t.elements acc
+
+  let cardinal t = t.produced
+
+  let create size hash =
+    {
+      elements = Parray.create size Bucket.empty;
+      hash;
+      produced = 0
+    }
+end
 
 (* ------------------------------------------------------------------------ *)
 
@@ -191,10 +273,14 @@ module Pack (Impl : S) = struct
   }
 end
 
-let sample ~size ~to_generate =
+let sample ~size  =
   let module P = Pack(Sample) in
-  P.pack (Sample.create ~size ~to_generate)
+  P.pack (Sample.create ~size)
 
 let pset cmp =
   let module P = Pack(PSet) in
   P.pack (PSet.create cmp)
+
+let hashset ~size ~hash =
+  let module P = Pack(HashSet) in
+  P.pack (HashSet.create size hash)
