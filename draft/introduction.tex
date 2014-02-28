@@ -14,15 +14,15 @@ Testing boils down to two different processes: generating test cases
 for test suites; and then verifying that user-written assertions and
 specifications of program parts are not falsified by the test suites.
 
-% TODO \cite
-\qcheck{} is a popular, efficient tool for that purpose. First, it
-provides a combinator library based on type-classes to build test case
-generators. Second, it provides a principled way for the users to
-specify properties over functions. For instance, users may write
-predicates such as ``reverse is an involution''. Then, the \qcheck
-framework is able to create \emph{instances} of the type being tested,
-e.g., lists of integers.  The predicate is tested against these test
-cases, and any counter-example is reported to the user.
+\qcheck{}~\cite{DBLP:conf/icfp/ClaessenH00} is a popular, efficient
+tool for that purpose. First, it provides a combinator library based
+on type-classes to build test case generators. Second, it provides
+a principled way for the users to specify properties over
+functions. For instance, users may write predicates such as ``reverse
+is an involution''. Then, the \qcheck framework is able to create
+\emph{instances} of the type being tested, e.g., lists of integers.
+The predicate is tested against these test cases, and any
+counter-example is reported to the user.
 
 Our novel approach is motivated by some limitations of the \qcheck
 framework.  When users create trees, for instance, not only do they

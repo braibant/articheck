@@ -44,12 +44,11 @@ Can we do better? In particular, can we capture the full language of first-order
 logic, as a reasonable test \emph{description language} for a practical
 framework?
 
-It feels natural to use first-order logic as a specification language in the
-context of structured verification, such as with SMT solvers or a finite
-% TODO \cite
-model~\cite{nitpick}.
-However, supporting full first-order logic as a specification language for
-randomly-generated tests is hard for various reasons. 
+It feels natural to use first-order logic as a specification language
+in the context of structured verification, such as with SMT solvers or
+a finite model finder~\cite{DBLP:conf/itp/BlanchetteN10}.  However,
+supporting full first-order logic as a specification language for
+randomly-generated tests is hard for various reasons.
 
 For instance, giving ``test semantics'' to an existentially-quantified formula
 such as $\exists(x \in t). T(x)$ is awkward. Intuitively, there is not much
