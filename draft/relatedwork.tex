@@ -44,16 +44,15 @@ compose operations in a type-incorrect way.
 The type description language we use captures a first-order subset of
 the simply-typed lambda-calculus. A natural question is whether it
 would be possible to support random function generation -- embed
-negative types into positives. Generating a function of type $\sigma
-\to \tau$ would entail adding its argument to the base of known values
-at type $\sigma$, and generating random values at type $\tau$ using
-the operations of the signature. This may result in genuinely new
-values if the argument passed is not reachable otherwise. Consider for instance
-a signature with two abstract types \code{t, u} and a single operation
-of type \code{(t -> t) -> u}: the only way to produce a \code{u} is to
-generate the identity function. \qcheck function generation supports
-using the function argument as additional entropy, but does not use the
-argument otherwise, and could not synthesize the identity function here.
+negative types into positives. A simple way to generate a function of
+type \code{a -> b} is to just generate a \code{b} at each call;
+\qcheck additionally uses the \code{a} argument to produce additional
+entropy. This is not completely satisfying as it does not use the
+argument at type \code{a} (which may not be otherwise reachable from
+the interface) to produce new values of type \code{b}. To have full
+test coverage for higher-order functional, one should locally add the
+argument to the set of known elements at type \code{a}, and
+re-generate values at type \code{b} in that extended environment.
 
 It would also be interesting to support representation of polymorphic
 operations; we currently only describe monomorphic
