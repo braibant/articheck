@@ -16,8 +16,7 @@ to construct.
 The point of view adopted in this section is intentedly simplistic. The design,
 as presented here, contains several obvious shortcomings. It allows,
 nonetheless, for a high-level overview of our principles, and paves the way for
-a more thorough discussion of our design which appears in
-\sref{sec:representation}.
+a more thorough discussion of our design (\sref{sec:representation}).
 
 Here is the signature for our module of sorted integer lists.
 %
@@ -33,8 +32,7 @@ end
 \end{ocamlcode}
 %
 The \code{check} function represents the \emph{invariant} that the module
-pretends it preserves. The module admits a straightforward implementation, as
-follows.
+intends to preserve. The module admits a straightforward implementation.
 %
 \begin{ocamlcode}
 module SIList = struct
@@ -133,7 +131,7 @@ of \code{'b}.
 %
 % The function below doesn't need the special GADT syntax. Go figure.
 \begin{ocamlcode}
-let use (fd: ('a, 'b) fn) (f: 'a) =
+let use (fd: ('a, 'b) fn) (f: 'a): () =
   let prod = eval fd f in
   let ty = codom fd in
   List.iter (fun x -> 
@@ -153,7 +151,7 @@ done, the user can finally call our library and test the functions found in the
 signature description.
 %
 \begin{ocamlcode}
-type sig_elem = Elem : ('a,'b) fn * 'a -> elem
+type sig_elem = Elem : ('a,'b) fn * 'a -> sig_elem
 type sig_descr = (string * sig_elem) list
 let si_t  =
   (* create a descriptor for [SIList.t]... *)
@@ -166,12 +164,12 @@ let sig_of_silist = [
 ]
 
 let _ =
-  Arti.check sig_of_silist SIList.check
+  Arti.generate sig_of_silist;
+  assert (Arti.counter_example si_t SIList.check = None)
 \end{ocamlcode}
 %
-The \code{Arti.check} function repeatedly calls \code{use} on the items found in
-the signature, until the desired number of instances have been created. The
-library calls \code{use} for each function in the signature several times:
-failing that, the only applications we could ever build would be of the form
-\code{add empty n}. The library then fetches the descriptor for \code{SIList.t}
-and check that each instance satisfies the \code{SIList.check} predicate.
+The \code{Arti.generate} function repeatedly calls \code{use} on the items found in
+the signature, until the desired number of instances have been created. We need
+to perform several rounds of calls; with a single pass, the only applications we
+would ever build would be of the form \code{add empty n}. We then check that the
+\code{SIList.check} predicate holds for all the \code{SIList.t} generated.

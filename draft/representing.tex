@@ -64,12 +64,9 @@ We do \emph{not} provide an injection from negative types to positive types:
 this would allow nested arrows, that is, higher-order types.  One can take the
 example of the \code{map} function, which has type \code{('a -> 'b) -> 'a list
 -> 'b list}: we explicitly disallow
-% TODO jp: supposedly we're talking about that later on... I don't know where,
-% but when we do, put a forward reference.
 representing the \code{'a -> 'b} part as a
 \code{Fun} constructor, as it would require us to synthesize instances of a
-function type.
-% TODO jp: Gabriel more explanations here KTHXBYE
+function type (see \sref{sec:higher-order} for a discussion).
 Rather, we ask the user to represent \code{'a -> 'b} as a \code{Ty} constructor;
 in other words, we ask the user to supply their own test functions as if they
 were a built-in type.
@@ -115,8 +112,8 @@ let _ =
 %
 Let us first turn to the case of \emph{values}. In order to understand what \arti
 ought to do, one may ask themselves what the user can do with values. The user
-may destruct them: given a pair of type \code{'a * 'b}, the user may keep just
-the first element, thus obtaining a new \code{'a}. The same goes for sums. We
+may destruct them: given a pair of type \code{'a * 'b}, the user may keep 
+the first element only, thus obtaining a new \code{'a}. The same goes for sums. We
 thus provide a \code{destruct} function, which breaks down positives types by
 pattern-matching, populating the descriptions of the various types it encounters
 as it goes. (The \code{remember} function records all instances we haven't
@@ -278,8 +275,7 @@ artificially finite in order to obtain the termination property.
 
 Implementing an efficient fixpoint computation is a \emph{surprisingly
 interesting} activity, and we are happy to use an off-the-shelf fixpoint
-library, François Pottier's \code{Fix},
-%TODO href?
+library, F. Pottier's \code{Fix}~\cite{fix},
 to perform the work for us. \code{Fix} can be summarized by the signature
 below, obtained from user-defined instantiations of the types \code{variable}
 and \code{property}.
@@ -294,7 +290,6 @@ module Fix = sig
 end
 \end{ocamlcode}
 %
-% TODO \cite
 A system of equations maps a variable to a right-hand side.  Each right-hand
 side can be evaluated by providing a valuation so as to obtain a property.
 Valuations map variables to properties. Solving a system of equations amounts to
