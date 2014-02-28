@@ -63,39 +63,45 @@ end
 
 module Sample : sig
   include S
-  val create : int -> 'a t
+  val create : size:int -> to_generate:int -> 'a t
 end = struct
 
+  (* We need three values here:
+     - the size of the sample that we keep.
+     - the number of elements generated so far.
+     - the maximal number of elements to generate
+  *)
   type 'a t =
     {
       elements: 'a Parray.t option;
       size  : int;
-      count : int;
+      generated : int;
+      to_generate : int
     }
 
-  let create size = {elements = None; count = 0; size}
+  let create ~size ~to_generate = {elements = None; generated = 0; size; to_generate}
 
   let insert e v =
     match v.elements with
-    | None -> {v with elements = Some (Parray.create v.size e); count = 1}
+    | None -> {v with elements = Some (Parray.create v.size e); generated = 1}
     | Some elements ->
-      if v.count < v.size
+      if v.generated < v.size
       then                                (* fill the reservoir *)
-        let elements = Some (Parray.set elements v.count e) in
-        {elements; count = v.count + 1; size = v.size}
+        let elements = Some (Parray.set elements v.generated e) in
+        {v with elements; generated = v.generated + 1}
       else
-        let j = Random.int (v.count) in  (* between 0 and v.count - 1 *)
+        let j = Random.int (v.generated) in  (* between 0 and v.generated - 1 *)
         if j < v.size
         then
           let elements = Some (Parray.set elements j e) in
-          {elements; count = v.count + 1; size = v.size}
-        else {v with count = v.count + 1}
+          {v with elements; generated = v.generated + 1}
+        else {v with generated = v.generated + 1}
 
   let fold f v init = match v.elements with
     | None -> init
     | Some elements -> Parray.fold f elements init
 
-  let cardinal v = min (v.size) (v.count)
+  let cardinal v = v.generated
 end
 
 
@@ -185,9 +191,9 @@ module Pack (Impl : S) = struct
   }
 end
 
-let sample n =
+let sample ~size ~to_generate =
   let module P = Pack(Sample) in
-  P.pack (Sample.create n)
+  P.pack (Sample.create ~size ~to_generate)
 
 let pset cmp =
   let module P = Pack(PSet) in
