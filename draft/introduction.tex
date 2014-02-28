@@ -24,21 +24,32 @@ The predicate is tested against these test cases, and any
 counter-example is reported to the user.
 
 Our novel approach is motivated by some limitations of the \qcheck
-framework.  When users create trees, for instance, not only do they
-have to specify that leaves should be generated more often than nodes
-(for otherwise the tree generation would not terminate), but they also
-have to rely on a global size measure to stop generating new nodes
-after a while. It is thus up to the user of the library to implement
-their own logic for generating the right instances, within a
-reasonable size limit, combining the various base cases.
+framework.
+%
+First, data-structures often have \emph{internal invariants} that
+should not be brocken when using the data-structure's API. Thus,
+testing one particular function of such an API requires to generate
+test-cases that meet these invariants.
+%
+Yet, writing \emph{good} generators for (involved) data-structure is
+tedious, or even plain hard. Consider the simple problem of generating
+binary search trees (BST), for instance: moving beyond the simple
+procedure of generating trees, and filtering out those which are not
+search trees requires to reimplement a series of insertion and
+deletions into BSTs. But these functions are most certainly already
+part of the code that is tested!
+%
 
-We argue that these low-level manipulations should be taken care of by the
-library. When generating binary search tree instances, one ends up
-re-implementing a series of random additions and deletions, which are precisely
-the functions that the code to be tested for exports. What if the testing
-framework could, by itself, combine functions exported by the module we wish to
-test, in order to build instances of the desired type? As long as the the module
-exports its correctness properties, the library needs not see the implementation.
+We argue that this low-level manipulation could be taken care of by
+the testing framework. That is, we argue that the framework should be
+able, by itself, to combine functions exported by the module we wish
+to test in order to build instances of the data-types defined in the
+same module. If the module exports the properties and the invariants
+that should hold, then the testing framework needs not to see the
+implementation.
+%
+In a nutshell, we want move to \emph{external testing} of abstract
+modules.
 
 In the present document, we describe a library that does precisely
 that, dubbed \arti. The library is written in OCaml. While \qcheck
