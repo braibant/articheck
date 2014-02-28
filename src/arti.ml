@@ -228,11 +228,6 @@ module Eval = struct
       | Cons (s,sd) ->
         iter (fun e -> eval sd (f e)) s
 
-  let main:
-  type a b.  (a,b) negative -> a -> unit = fun  n f ->
-    let sd = scaffold n in
-    eval sd f
-
 end
 
 (** Check a property over all the elements of ['a ty] that were
@@ -299,21 +294,46 @@ struct
 
   let touch env ty = ignore (env (Atom ty))
 
+  (* For efficiency, we do a bit of preprocessing on the signature,
+     that is, we precompute the inputs and outputs atoms for a given
+     negative element. *)
+
+  type atoms =
+      {
+	inputs : atom list;
+	outputs: atom list;
+      }
+
+  let atoms:
+  type a b. (a,b) negative -> atoms = fun fd ->
+      let inputs = neg_atoms fd in
+      let outputs = pos_atoms (codom fd) in
+      {inputs;outputs}
+
+  type popelem =
+    | Popelem: ('a,'b) Eval.scaffold * 'a -> popelem
+
   let populate sig_ =
+    let sig_ = List.map (fun (id, Elem (fd,f)) -> (id, Elem (fd,f), atoms fd)) sig_ in
+
     let eqs : F.variable -> (F.valuation -> F.property) =
       fun atom env ->
 	Printf.printf "-%!";
+	(* Snapshot all the signature elements *)
+	let mem = List.exists (eq_atom atom) in
+	let constructors = List.fold_left (fun acc (_, Elem (fd,f), atoms) ->
+	  if mem atoms.outputs
+	  then begin
+	    (Popelem (Eval.scaffold fd,f), atoms) :: acc
+	  end
+	  else acc
+	) [] sig_ in
         (* use the proper constructors *)
-        List.iter (fun (_, Elem (fd, f)) ->
-          let inputs = neg_atoms fd in
-          let head = codom fd in
-          let outputs = pos_atoms head in
-          if List.exists (eq_atom atom) outputs then begin
-            List.iter (fun (Atom ty) -> touch env ty) inputs;
-            Eval.main fd f
-          end
-        ) sig_;
-        (* use fresh *)
+	List.iter (fun (Popelem (sd,f), atoms) ->
+	  List.iter (fun (Atom ty) -> touch env ty) atoms.inputs;
+	  Eval.eval sd f
+	) constructors;
+	(* use fresh *)
         let (Atom ty) = atom in
         Ty.populate 10 ty;
         { produced = Ty.cardinal ty;
