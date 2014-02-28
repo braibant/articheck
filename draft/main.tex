@@ -54,7 +54,7 @@
 \maketitle
 
 \begin{abstract}
-  In spite of recent advances in full program certification, testing remains a
+  In spite of recent advances in program certification, testing remains a
   widely-used component of the software development cycle. Various flavors of
   testing exist: popular ones include \emph{unit testing}, which consists in
   manually crafting test cases for specific parts of the code base, as well as
@@ -62,12 +62,12 @@
   generated to serve as test inputs.
 
   These classical methods of testing can be thought of as \emph{internal}
-  testing: the test routines access the internal representation of whatever data
-  structure should be checked. We propose a new method of \emph{external}
+  testing: the test routines access the internal representation of the data
+  structures to be checked. We propose a new method of \emph{external}
   testing where the library only deals with a \emph{module interface}. The data
   structures are exported as \emph{abstract types}; the testing framework
-  behaves just like regular client code and combines functions exported by the
-  module to build new elements of the various types. Counter-examples, if any,
+  behaves like regular client code and combines functions exported by the
+  module to build new elements of the various abstract types. Any counter-examples
   are then presented to the user.
 \end{abstract}
 

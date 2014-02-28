@@ -112,8 +112,8 @@ let _ =
 %
 Let us first turn to the case of \emph{values}. In order to understand what \arti
 ought to do, one may ask themselves what the user can do with values. The user
-may destruct them: given a pair of type \code{'a * 'b}, the user may keep just
-the first element, thus obtaining a new \code{'a}. The same goes for sums. We
+may destruct them: given a pair of type \code{'a * 'b}, the user may keep 
+the first element only, thus obtaining a new \code{'a}. The same goes for sums. We
 thus provide a \code{destruct} function, which breaks down positives types by
 pattern-matching, populating the descriptions of the various types it encounters
 as it goes. (The \code{remember} function records all instances we haven't
@@ -275,7 +275,7 @@ artificially finite in order to obtain the termination property.
 
 Implementing an efficient fixpoint computation is a \emph{surprisingly
 interesting} activity, and we are happy to use an off-the-shelf fixpoint
-library, François Pottier's \code{Fix}~\cite{fix},
+library, F. Pottier's \code{Fix}~\cite{fix},
 to perform the work for us. \code{Fix} can be summarized by the signature
 below, obtained from user-defined instantiations of the types \code{variable}
 and \code{property}.

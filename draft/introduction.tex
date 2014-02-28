@@ -9,9 +9,8 @@ cornerstone of the development cycle. Moreover, even if the end goal is to fully
 certify a program using a proof assistant, it is still worthwhile to eliminate
 bugs early by running a cheap, efficient test framework.
 
-
 Testing boils down to two different processes: generating test cases
-for test suites; and then verifying that user-written assertions and
+for test suites; then verifying that user-written assertions and
 specifications of program parts are not falsified by the test suites.
 
 \qcheck{}~\cite{DBLP:conf/icfp/ClaessenH00} is a popular, efficient
@@ -36,11 +35,10 @@ reasonable size limit, combining the various base cases.
 We argue that these low-level manipulations should be taken care of by the
 library. When generating binary search tree instances, one ends up
 re-implementing a series of random additions and deletions, which are precisely
-the function that the code to be tested for exports. What if the testing
+the functions that the code to be tested for exports. What if the testing
 framework could, by itself, combine functions exported by the module we wish to
 test, in order to build instances of the desired type? As long as the the module
-exports its correctness properties, all the testing library needs is functions
-that \emph{return} $t$'s.
+exports its correctness properties, the library needs not see the implementation.
 
 In the present document, we describe a library that does precisely
 that, dubbed \arti. The library is written in OCaml. While \qcheck
