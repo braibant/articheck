@@ -73,17 +73,13 @@ memory. This allows for an efficient, non-redundant generation of test cases
 \subsection{AVL trees}
 
 AVL trees are a classic of programming interviews; many a graduate
-student has been scared by the mere mention of them. It turns out that tenured
-professors \emph{should} be scared too: the OCaml implementation of maps,
-written using AVL trees by a respectable researcher, contained a bug that went
-unnoticed for more than ten years.
-% TODO fact checking
-The bug was discovered when another enthusiastic researcher set out to formalize
-the said library in Coq. The bug was fixed, and all was well. Out of curiosity,
-we decided to run \arti on the faulty version of the library.
-% TODO wrote that in anticipation, so fix afterwards KTHXBYE
-After registering only four functions with \arti, the bug was correctly
-identified by our library, with arguably less pain than the full Coq
-formalization required.
-
-
+student has been scared by the mere mention of them. It turns out that
+tenured professors \emph{should} be scared too: the OCaml
+implementation of sets, written using AVL trees by a respectable
+researcher, contained a bug that went unnoticed for more than ten
+years. The bug was discovered when another enthusiastic researcher
+set out to formalize the said library in Coq. The bug was fixed, and
+all was well. Out of curiosity, we decided to run \arti on the faulty
+version of the library.  After registering only four functions with
+\arti, the bug was correctly identified by our library, with arguably
+less pain than the full Coq formalization required.
