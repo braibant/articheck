@@ -64,12 +64,9 @@ We do \emph{not} provide an injection from negative types to positive types:
 this would allow nested arrows, that is, higher-order types.  One can take the
 example of the \code{map} function, which has type \code{('a -> 'b) -> 'a list
 -> 'b list}: we explicitly disallow
-% TODO jp: supposedly we're talking about that later on... I don't know where,
-% but when we do, put a forward reference.
 representing the \code{'a -> 'b} part as a
 \code{Fun} constructor, as it would require us to synthesize instances of a
-function type.
-% TODO jp: Gabriel more explanations here KTHXBYE
+function type (see \sref{sec:higher-order} for a discussion).
 Rather, we ask the user to represent \code{'a -> 'b} as a \code{Ty} constructor;
 in other words, we ask the user to supply their own test functions as if they
 were a built-in type.

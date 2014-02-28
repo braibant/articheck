@@ -20,14 +20,14 @@ rule to generate random values at type $\tau$ from a function at type
 $\sigma \to \tau$ and random values at type $\sigma$ could be
 expressed, in term of \qcheck \code{Arbitrary} instances, as
 a deduction rule of the form \code{instance Arbitrary b, Arbitrary
-  (a -> b) => Arbitrary b where ...}; but Haskell's type-class
-mechanism would not allow this instance deduction rule, which does not
+  (a -> b) => Arbitrary b where ...}. However, Haskell's type-class
+mechanism would not allow this instance deduction rule, as it does not
 respect its restrictions for principled, coherent instance
 elaboration. Type classes are a helpful and convenient host-language
 mechanism, but they are designed for code inference rather than
 arbitrary proof search. Our library-level implementation of well-typed
 proof search using GADTs gives us more freedom, and is the central
-idea of \code{ArtiCheck}.
+idea of \arti.
 
 It is of course possible to see chaining of function/method calls as
 a metaprogramming problem, and generate a reified description of those
@@ -39,19 +39,20 @@ guarantees: even if our value generator is buggy, it will never
 compose operations in a type-incorrect way.
 
 \paragraph{Testing of higher-order or polymorphic interfaces}
+\label{sec:higher-order}
 
 The type description language we use captures a first-order subset of
 the simply-typed lambda-calculus. A natural question is whether it
 would be possible to support random function generation -- embed
 negative types into positives. Generating a function of type $\sigma
-\to \tau$ would entail adding its argument to the base of known value
+\to \tau$ would entail adding its argument to the base of known values
 at type $\sigma$, and generating random values at type $\tau$ using
 the operations of the signature. This may result in genuinely new
-values if the argument passed is not reachable otherwise; consider
+values if the argument passed is not reachable otherwise. Consider for instance
 a signature with two abstract types \code{t, u} and a single operation
 of type \code{(t -> t) -> u}: the only way to produce a \code{u} is to
-generate the identity function. \qcheck function generation support
-use the function argument as additional entropy, but does not use the
+generate the identity function. \qcheck function generation supports
+using the function argument as additional entropy, but does not use the
 argument otherwise, and could not synthesize the identity function here.
 
 It would also be interesting to support representation of polymorphic
@@ -59,9 +60,9 @@ operations; we currently only describe monomorphic
 instantiations. Bernardy, Jansson and
 Claessen~\cite{DBLP:conf/esop/BernardyJC10} have proposed
 a parametricity-based technique to derive specific monomorphic
-instances for type arguments, that also reduces the search space of
+instances for type arguments, which also reduces the search space of
 values to be tested. Supporting this technique would be a great asset
-of a testing library, but it is not at all obvious how their
+of a testing library, but it is definitely not obvious how their
 pen-and-paper derivation could be automatized -- and even less so
 whether this can be done internally, in the host language of the
 implementations being tested.
@@ -73,7 +74,7 @@ process: from a set of already-discovered values at the types of
 interest, we use the constructors of the interface to produce new
 values. In contrast, most random checking tools present generation in
 a top-down fashion: pick the head constructor of the data value, then
-we'll generate its subcomponents recursively. One notable exception is
+generate its subcomponents recursively. One notable exception is
 SmallCheck~\cite{DBLP:conf/haskell/RuncimanNL08}, which performs
 exhaustive testing for values of bounded depth.
 
@@ -86,7 +87,7 @@ that uses laziness (demand-driven computation) to avoid fleshing out
 value parts that are not inspected by the property being tested.
 
 Furthermore, the genericity of our high-level interface makes
-\code{Articheck} amenable to change in the generation technique; we
+\code{Articheck} amenable to a change in the generation technique; we
 could implement direct top-down search without changing the signature
 description language, or most parts of the library interface.
 
@@ -95,16 +96,16 @@ description language, or most parts of the library interface.
 We discussed in Section~\ref{sec:properties} the difficulty of
 isolating an expressive fragment of first-order logic as a property
 language that could be given a realizable testing semantics. As it
-does exhaustive search (up to a bound), SmallCheck is able to give
+performs exhaustive search (up to a bound), SmallCheck is able to give
 a non-surprising semantics to existential quantification. As we let
 user control for each interface datatype whether an exhaustive
 collection or random reservoir sampling should be used, we could
 support existential on exhaustively collected types only.
 
-Otherwise, the work that stands out by supporting full-fledged
-first-order logic for random checking is Berghofer and Nipkow's
+In related manner, Berghofer and Nipkow's
 implementation of QuickCheck for
-Isabelle~\cite{DBLP:conf/sefm/BerghoferN04}. In the Isabelle proof
+Isabelle~\cite{DBLP:conf/sefm/BerghoferN04} stands out by supporting full-fledged
+first-order logic for random checking. In the Isabelle proof
 assistant, it is common to define computations as inductive
 relations/predicates that can be given a (potentially
 non-deterministic) functional mode; instead of directly turning
@@ -123,4 +124,4 @@ the precondition. This gives a logic-based justification to various
 heuristics used in other works to generate random values more likely
 to pass the precondition, either
 domain-specific~\cite{DBLP:conf/tap/ClaessenS08} or
-  SAT-based~\cite{DBLP:conf/tap/AhnD10}.
+SAT-based~\cite{DBLP:conf/tap/AhnD10}.
