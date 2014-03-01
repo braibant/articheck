@@ -44,11 +44,7 @@ functions, would probably perform sequences of calls to the various functions.
 What they would fail to do, however, is destructing pairs so as to produce
 a zipper associated with \emph{the wrong tree}. This particularly wicked usage
 would probably be overlooked. \arti successfully destructs the pair and performs
-recombinations, to finally output:
-\begin{verbatim}
-  TODO: fix the code so that it terminates
-    ... and put the error message here
-\end{verbatim}
+recombinations, thus finding the bug.
 
 \subsection{Binary Decision Diagrams}
 

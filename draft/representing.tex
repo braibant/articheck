@@ -235,7 +235,7 @@ instances obtained after \code{n} calls than there are after
 \code{n+1} calls. It may thus be the case that by the time we reach
 three of four consecutive function calls, we've hit the maximum limit
 of instances allowed for the type, since it often is the case that the
-number of instances grow exponentially.
+number of instances grows exponentially.
 
 To solve this issue, we turn to \emph{reservoir sampling}, which is a
 method to choose a sample of elements from a set that is typically too
@@ -246,11 +246,11 @@ is quite elegant. The idea is as follows: build a collection of $k$
 elements; then for each element $e$ of index $i$ such that $k < i$,
 pick a number $j$ at random between $1$ and $i$: if $j$ is less than
 $k$, replace the $j$-th element of the collection by $e$, and do
-nothing otherwise. In the end, each element that was added as the same
+nothing otherwise. In the end, each element that was added has the same
 probability of being in the collection.
 
 Unfortunately, iterating over the collection to produce new instances
-of types bias the generation toward small instances. To get an idea of
+of types biases the generation towards small instances. To understand
 why, imagine that the collection contains initially many $1$ and that
 we produce new elements for the sampling process by taking the sum of
 two elements of the collection. The final distribution is very likely
@@ -265,7 +265,7 @@ buckets. The idea is that when a bucket becomes full, we drop one
 element. That way, we manage to keep a good balance between the size
 of our instances sets, and the diversity of the instances.
 
-We have experimented with the three containers structures described
+We have experimented with the three container structures described
 above: ``regular'' sets, ``sampled'' sets and hash-sets. Out of the
 three, the latest is the one that gives the most interesting results
 empirically.

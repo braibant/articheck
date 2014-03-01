@@ -13,7 +13,7 @@ simply-typed lambda calculus; a description of module signatures that we wish to
 test; type descriptors that record all the instances of a type that we managed
 to construct.
 
-The point of view adopted in this section is intentedly simplistic. The design,
+The point of view adopted in this section is intendedly simplistic. The design,
 as presented here, contains several obvious shortcomings. It allows,
 nonetheless, for a high-level overview of our principles, and paves the way for
 a more thorough discussion of our design (\sref{sec:representation}).
@@ -80,9 +80,9 @@ combinations of functions are legal for \arti to perform.
 
 In essence, we want to represent well-typed applications in the
 simply-typed lambda-calculus. This can be embedded in OCaml using generalized
-algebraic data types (GADTs). We define the GADT \code{('f, 'r) fn}, which
-describes ways to generate instances of type \code{'r} using a function of type
-\code{'f}. We call it a \emph{function descriptor}.
+algebraic data types (GADTs). We define the GADT \code{('a, 'b) fn}, which
+describes ways to generate instances of type \code{'b} using a function of type
+\code{'a}. We call it a \emph{function descriptor}.
 %
 \begin{ocamlcode}
 type (_,_) fn =
