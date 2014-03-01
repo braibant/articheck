@@ -45,14 +45,14 @@ The type description language we use captures a first-order subset of
 the simply-typed lambda-calculus. A natural question is whether it
 would be possible to support random function generation -- embed
 negative types into positives. A simple way to generate a function of
-type \code{a -> b} is to just generate a \code{b} at each call;
-\qcheck additionally uses the \code{a} argument to produce additional
+type \code{t -> u} is to just generate a \code{u} at each call;
+\qcheck additionally uses the \code{t} argument to produce additional
 entropy. This is not completely satisfying as it does not use the
-argument at type \code{a} (which may not be otherwise reachable from
-the interface) to produce new values of type \code{b}. To have full
+argument at type \code{t} (which may not be otherwise reachable from
+the interface) to produce new values of type \code{u}. To have full
 test coverage for higher-order functional, one should locally add the
-argument to the set of known elements at type \code{a}, and
-re-generate values at type \code{b} in that extended environment.
+argument to the set of known elements at type \code{t}, and
+re-generate values at type \code{u} in that extended environment.
 
 It would also be interesting to support representation of polymorphic
 operations; we currently only describe monomorphic
