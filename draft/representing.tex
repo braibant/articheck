@@ -8,10 +8,10 @@ reviews the issues with the current design and incrementally addresses them.
 \subsection{A better algebra of types}
 \label{sec:algebra}
 
-The simply-typed lambda calculus that we introduced only contains constants and
-functions. While one can theoretically encode sums and products using functions,
-it seems reasonable to have a built-in notion of sums and products in our
-language.
+Type descriptions only model function types so far. We want to support
+products and sums, to be able to generate them when they appear in
+function arguments, and to use them to discover new values when they
+are returned as function results.
 
 One of the authors naïvely suggested that the data type be extended with cases
 for products and sums, such as:
@@ -20,7 +20,7 @@ for products and sums, such as:
 | Prod: ('a,'c) fn * ('b,'c) fn -> ('a * 'b,'c) fn
 \end{ocamlcode}
 %
-It turns out that the branch above does not describe products. If \code{'a} is
+It turns out that the constructor above does not model product arguments. If \code{'a} is
 \code{int -> int} and \code{'b} is \code{int -> float}, not only do the
 \code{'c} parameters fail to match, but the \code{'a * 'b} parameter in the
 conclusion represents a pair of functions, rather than a function that returns a
@@ -29,15 +29,15 @@ a product. If the first parameter of type \code{('a, 'b) fn} represents a way to
 obtain a \code{'b} from the product type \code{'a}, then what use is the second
 parameter of \code{eval}?
 
-In light of these limitations, we take inspiration from the literature on
-% TODO \cite
-focusing and break the \code{fn} type into two distinct GADTs.
+Datatypes and function types are used in fundamentally different ways
+by the generator, which suggests splitting the \code{fn} type into two
+distinct GADTs -- inspired by the focusing literature~\cite{DBLP:conf/csl/LiangM07}.
   The GADT \code{('a, 'b) negative} (\code{neg} for short) represents a
     \emph{computation} of type \code{'a} that produces a result of type
     \code{'b}.
   The GADT \code{'a positive} (\code{pos} for short) represents a
     \emph{value}, that is, the result of a computation.
-%
+
 % 3a9c140
 \begin{ocamlcode}
 type (_, _) neg =
@@ -57,16 +57,16 @@ types, that is, whatever is on the rightmost side of an arrow. We provide an
 injection from positive to negative types via the \code{Ret} constructor: a
 value of type \code{'a} is also a constant computation.
 
-We do \emph{not} provide an injection from negative types to positive types:
-this would allow nested arrows, that is, higher-order types.  One can take the
-example of the \code{map} function, which has type \code{('a -> 'b) -> 'a list
--> 'b list}: we explicitly disallow
-representing the \code{'a -> 'b} part as a
-\code{Fun} constructor, as it would require us to synthesize instances of a
-function type (see \sref{sec:higher-order} for a discussion).
-Rather, we ask the user to represent \code{'a -> 'b} as a \code{Ty} constructor;
-in other words, we ask the user to supply their own test functions as if they
-were a built-in type.
+We do \emph{not} provide an injection from negative types to positive
+types, which would be necessary to model nested arrows, that is,
+higher-order functions. One can take the example of the \code{map}
+function, which has type \code{('a -> 'b) -> 'a list -> 'b list}: we
+explicitly disallow representing the \code{'a -> 'b} part as
+a \code{Fun} constructor, as it would require us to synthesize
+instances of a function type (see \sref{sec:higher-order} for
+a discussion). Note that the user can still use the \code{Ty}
+constructor to represent \code{'a -> 'b} as an atomic type,
+initialized with its own test functions.
 
 Our GADT does not accurately model tagged, n-ary sums of OCaml, nor records with
 named fields. We thus add a last \code{Bij} case; it allows the user to
