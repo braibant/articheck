@@ -19,15 +19,20 @@ of well-typed value generation as term/proof search. Our well-typed
 rule to generate random values at type $\tau$ from a function at type
 $\sigma \to \tau$ and random values at type $\sigma$ could be
 expressed, in term of \qcheck \code{Arbitrary} instances, as
-a deduction rule of the form \code{instance Arbitrary b, Arbitrary
-  (a -> b) => Arbitrary b where ...}. However, Haskell's type-class
-mechanism would not allow this instance deduction rule, as it does not
-respect its restrictions for principled, coherent instance
-elaboration. Type classes are a helpful and convenient host-language
-mechanism, but they are designed for code inference rather than
-arbitrary proof search. Our library-level implementation of well-typed
-proof search using GADTs gives us more freedom, and is the central
-idea of \arti.
+a deduction rule of the form\vspace{-0.3em}
+%
+\begin{haskellcode}
+instance Arbitrary b, Arbitrary (a -> b) => Arbitrary b
+\end{haskellcode}
+\vspace{-0.3em}
+%
+However, Haskell's type-class mechanism would not allow this instance
+deduction rule, as it does not respect its restrictions for
+principled, coherent instance elaboration. Type classes are a helpful
+and convenient host-language mechanism, but they are designed for code
+inference rather than arbitrary proof search. Our library-level
+implementation of well-typed proof search using GADTs gives us more
+freedom, and is the central idea of \arti.
 
 It is of course possible to see chaining of function/method calls as
 a metaprogramming problem, and generate a reified description of those

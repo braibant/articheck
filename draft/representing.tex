@@ -49,6 +49,7 @@ and _ pos =
 | Prod : 'a pos  * 'b pos -> ('a * 'b) pos
 | Bij : 'a pos * ('a, 'b) bijection -> 'b pos
 and ('a, 'b) sum = L of 'a | R of 'b
+and ('a, 'b) bijection = ('a -> 'b) * ('b -> 'a)
 \end{ocamlcode}
 %
 The \code{pos} type represents first-order data types: products, sums and atomic
@@ -91,8 +92,7 @@ and produce: type a. a pos -> a list =
   ...
 let rec destruct: type a. a pos -> a -> unit =
   function
-  | Ty ty -> (fun v ->
-      remember v ty)
+  | Ty ty -> (fun v -> remember v ty)
   | Prod (ta, tb) -> (fun (a, b) ->
       destruct ta a; destruct tb b)
   ...
@@ -164,7 +164,7 @@ that will become obvious in the following, we chose to replace lists
 with arbitrary containers that have the following (object-like) type:
 \begin{ocamlcode}
 type 'a bag = {
-  insert : 'a -> 'a t;
+  insert : 'a -> 'a bag;
   fold : 'b . ('a -> 'b -> 'b) -> 'b -> 'b;
   cardinal : unit -> int; }
 \end{ocamlcode}
@@ -202,14 +202,13 @@ constructs the various instances on-the-fly.
 \begin{ocamlcode}
 let rec iter: type a. (a -> unit) -> a set -> unit =
 fun f s -> match s with
-  | Set ps ->
-      Bag.iter f ps
+  | Set ps -> ps.fold (fun x () -> f x) ()
   | Union (pa,pb) ->
       iter (fun a -> f (L a)) pa;
       iter (fun b -> f (R b)) pb;
   | Product (pa,pb) ->
       iter (fun a -> iter (fun b -> f (a,b)) pb) pa
-  | (* ... *)
+  | Bij (p, (proj, _)) -> iter (fun x -> f (proj x)) p
 \end{ocamlcode}
 %
 

@@ -25,7 +25,7 @@ we also show.
 %
 % 7dd765501e4d12d98e9d90a0ece490486cfe6913
 \begin{ocamlcode}
-module type SIList: sig
+module SIList: sig
   type t
   val empty: t
   val add: t -> int -> t
@@ -36,9 +36,9 @@ end = struct
   let rec add x = function
     | [] -> [x]
     | t::q -> if t<x then t::add x q else x::t::q
-  let rec check = function
+  let rec sorted = function
     | [] | [_] -> true
-    | t1::(t2::_ as q) -> t1 <= t2 && check q
+    | t1::(t2::_ as q) -> t1 <= t2 && sorted q
 end
 \end{ocamlcode}
 %
@@ -114,14 +114,13 @@ descriptor associated to the return value (the codomain) of an \code{fn}.
 
 Using the two functions above, it then becomes trivial to generate new instances
 of \code{'b}.
-%
-% The function below doesn't need the special GADT syntax. Go figure.
+
 \begin{ocamlcode}
-let use (fd: ('a, 'b) fn) (f: 'a): () =
-  let prod = eval fd f in
-  let ty = codom fd in
+let use (fd: ('a, 'b) fn) (f: 'a): unit =
+  let prod, ty = eval fd f, codom fd in
   List.iter (fun x -> 
-    if mem x ty then () else ty.enum <- x::ty.enum
+    if not (List.mem x ty.enum)
+    then ty.enum <- x::ty.enum
   ) prod
 \end{ocamlcode}
 %
@@ -130,27 +129,28 @@ The function takes a function descriptor along with a matching function. The
 create; \code{ty} is the descriptor of \code{'b}. We store the new
 instances of \code{'b} in the corresponding type descriptor.
 
-In order to wrap this up nicely, one can define \emph{signature descriptors}. An
-entry in a signature descriptor is merely a function of a certain
-type \code{'a} along with its corresponding function descriptor. Once this is
-done, the user can finally call our library and test the functions found in the
-signature description.
+In order to wrap this up nicely, one can define \emph{signature
+  descriptors}. An entry in a signature descriptor is merely
+a function of a certain type \code{'a} along with its corresponding
+function descriptor. Once this is done, the user can finally call our
+library to generate random instances and test the functions found in
+the signature description.
 %
 \begin{ocamlcode}
 type sig_elem = Elem : ('a,'b) fn * 'a -> sig_elem
 type sig_descr = (string * sig_elem) list
-let si_t  = (* create a descriptor for [SIList.t] and... *)
-let int_t = (* one for [int], with a [fresh] function *)
+let si_t : SIList.t ty  = ...
+let int_t = ... (* integers use a [fresh] function*)
 let sig_of_silist = [
-  ("empty", (returning si_t, SIList.empty));
-  ("add", (int_t @-> si_t @-> returning si_t, SIList.add)); ]
+  ("empty", Elem (returning si_t, SIList.empty));
+  ("add", Elem (int_t @-> si_t @-> returning si_t, SIList.add)); ]
 let _ =
   Arti.generate sig_of_silist;
-  assert (Arti.counter_example si_t SIList.check = None)
+  assert (Arti.counter_example si_t SIList.sorted = None)
 \end{ocamlcode}
 %
-The \code{Arti.generate} function repeatedly calls \code{use} on the items found in
-the signature, until the desired number of instances have been created. We need
-to perform several rounds of calls; with a single pass, the only applications we
-would ever build would be of the form \code{add empty n}. We then check that the
-\code{SIList.check} predicate holds for all the \code{SIList.t} generated.
+% The \code{Arti.generate} function repeatedly calls \code{use} on the items found in
+% the signature, until the desired number of instances have been created. We need
+% to perform several rounds of calls; with a single pass, the only applications we
+% would ever build would be of the form \code{add empty n}. We then check that the
+% \code{SIList.sorted} predicate holds for all the \code{SIList.t} generated.
