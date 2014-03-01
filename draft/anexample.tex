@@ -19,7 +19,7 @@ nonetheless, for a high-level overview of our principles, and paves the way for
 a more thorough discussion of our design (\sref{sec:representation}).
 
 Here is the signature for our module of sorted integer lists.
-The \code{check} function represents the \emph{invariant} that the module
+The \code{sorted} function represents the \emph{invariant} that the module
 intends to preserve. The module admits a straightforward implementation, which
 we also show.
 %
@@ -29,7 +29,7 @@ module SIList: sig
   type t
   val empty: t
   val add: t -> int -> t
-  val check: t -> bool
+  val sorted: t -> bool
 end = struct
   type t = int list
   let empty = []
