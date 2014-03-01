@@ -1,7 +1,7 @@
 \section{Expressing correctness properties}
 \label{sec:properties}
 
-We mentioned in the \code{SIList} example the \code{counter\_example} function.
+We mentioned earlier (\sref{sec:essence}) the \code{counter\_example} function.
 % TODO: remove the signature?
 %
 \begin{ocamlcode}
@@ -12,25 +12,25 @@ The function takes a description of some (positive) datatype
 \code{'a}, iterates on the generated instances of this type and checks
 that a predicate \code{'a -> bool} holds for all instances, or returns
 a counter-example otherwise. At a more abstract level, this means that we are
-checking a property of the form \[ \forall (x \in t), T(x) \] where
+checking a property of the form $ \forall (x \in t), T(x) $ where
 $T(x)$ is simply a boolean expression.
 Multiple quantifiers can be simulated through the use of product types, such as
 in the typical formula of association maps:
 %
-\[\begin{array}{l}
-  \forall (m \in \mathtt{map}(K,V))\ \forall (k \in K)\ \forall (v \in V),\\
-  \qquad \mathtt{lookup(k,insert(k,v,m)) = v}
-\end{array}\]
+\[
+\forall (m \in \mathtt{map}(K,V), k \in K, v \in V),
+  \ \mathtt{find(k,add(k,v,m)) = v}
+\]
 %
 which can be expressed as follows (where \code{*@} is the operator for creating
 product type descriptors):
 %
 \begin{ocamlcode}
-  let lookup_insert_prop (k, v, m) =
-    lookup k (insert k v m) = v
-  let () = assert (None =
-    let kvm_t = k_t *@ v_t *@ map_t in
-    counter_example kvm_t lookup_insert_prop)
+let lookup_insert_prop (k, v, m) =
+  lookup k (insert k v m) = v
+let () = assert (None =
+  let kvm_t = k_t *@ v_t *@ map_t in
+  counter_example kvm_t lookup_insert_prop)
 \end{ocamlcode}
 
 One then naturally wonders what a good language would be for describing the
@@ -64,8 +64,8 @@ Surprisingly enough, there does not seem to be a consensus in the
 literature about random testing for an expressive, well-defined subset of
 first-order logic. The simplest subset one directly thinks of is
 formulas of the form:
-\[ \forall x_1 \dots x_n, P(x_1, \dots, x_n) \Rightarrow T(x_1, \dots,
-x_n) \] where $P(x_1, \dots, x_n)$ (the \emph{precondition}) and
+$ \forall x_1 \dots x_n, P(x_1, \dots, x_n) \Rightarrow T(x_1, \dots,
+x_n) $ where $P(x_1, \dots, x_n)$ (the \emph{precondition}) and
 $T(x_1, \dots, x_n)$ (the \emph{test}) are both quantifier-free
 formulas.
 

@@ -32,26 +32,22 @@ parameter of \code{eval}?
 In light of these limitations, we take inspiration from the literature on
 % TODO \cite
 focusing and break the \code{fn} type into two distinct GADTs.
-\begin{itemize}
-  \item The GADT \code{('a, 'b) negative} (\code{neg} for short) represents a
+  The GADT \code{('a, 'b) negative} (\code{neg} for short) represents a
     \emph{computation} of type \code{'a} that produces a result of type
     \code{'b}.
-  \item The GADT \code{'a positive} (\code{pos} for short) represents a
+  The GADT \code{'a positive} (\code{pos} for short) represents a
     \emph{value}, that is, the result of a computation.
-\end{itemize}
 %
 % 3a9c140
 \begin{ocamlcode}
 type (_, _) neg =
 | Fun : 'a pos * ('b, 'c) neg -> ('a -> 'b, 'c) neg
 | Ret : 'a pos -> ('a, 'a) neg
-
 and _ pos =
 | Ty : 'a ty -> 'a pos
 | Sum : 'a pos * 'b pos -> ('a, 'b) sum pos
 | Prod : 'a pos  * 'b pos -> ('a * 'b) pos
 | Bij : 'a pos * ('a, 'b) bijection -> 'b pos
-
 and ('a, 'b) sum = L of 'a | R of 'b
 \end{ocamlcode}
 %
@@ -98,16 +94,12 @@ let rec destruct: type a. a pos -> a -> unit =
   | Ty ty -> (fun v ->
       remember v ty)
   | Prod (ta, tb) -> (fun (a, b) ->
-      destruct ta a;
-      destruct tb b)
+      destruct ta a; destruct tb b)
   ...
-
 (* Putting it all together *)
-let _ =
-  ...
+let _ = ...
   let li = apply fd f in
-  List.iter destruct li;
-  ...
+  List.iter destruct li; ...
 \end{ocamlcode}
 %
 Let us first turn to the case of \emph{values}. In order to understand what \arti
@@ -140,7 +132,7 @@ functions.
 
 The (assuredly naïve) scenario above reveals several pain points with the
 current design.
-\begin{itemize}
+\begin{compactitem}
   \item We represent our sets using lists. We could use a more efficient data
     structure.
   \item If some function takes, say, a tuple, the code as it stands will
@@ -162,7 +154,7 @@ current design.
   %   combinators are only reached after we've exhausted all possible instances
   %   with two or less combinators. This breadth-first search of the instance
   %   space is sub-optimal. Can we do better?
-\end{itemize}
+\end{compactitem}
 %
 
 \paragraph{Sets of instances}
@@ -174,12 +166,10 @@ with arbitrary containers that have the following (object-like) type:
 type 'a bag = {
   insert : 'a -> 'a t;
   fold : 'b . ('a -> 'b -> 'b) -> 'b -> 'b;
-  cardinal : unit -> int;
-}
+  cardinal : unit -> int; }
 \end{ocamlcode}
 For instance, we use an implementation of polymorphic, persistent sets
-(implemented as red-black trees), as a drop-in replacement for lists.
-
+(implemented as red-black trees), as a replacement for lists.
 
 \paragraph{Not holding sets in memory}
 A big source of inefficiency is the call to the
@@ -278,8 +268,8 @@ up early.
 
 The \code{apply}/\code{destruct} combination only demonstrates how to generate
 new instances from one specific element of the signature. We need to iterate
-this recipe on the whole signature, by feeding the new instances that we
-obtain to other functions that can in turn consume them.
+this on the whole signature, by feeding the new instances that we
+obtain to other functions that can consume them.
 
 This part of the problem naturally presents itself as a fixpoint computation,
 defined by a system of equations. Equations between variables (type descriptors)
@@ -301,9 +291,7 @@ module Fix = sig
   type valuation = variable -> property
   type rhs = valuation -> property
   type equations = variable -> rhs
-
-  val lfp: equations -> valuation
-end
+  val lfp: equations -> valuation end
 \end{ocamlcode}
 %
 A system of equations maps a variable to a right-hand side.  Each right-hand
@@ -322,8 +310,8 @@ mismatches are to be expected. One could, after all, use yet another GADT and
 hide the \code{'a} type parameter behind an existential variable.
 %
 \begin{ocamlcode}
-  type variable = Atom: 'a ty -> variable
-  type property = Props: 'a set -> property
+type variable = Atom: 'a ty -> variable
+type property = Props: 'a set -> property
 \end{ocamlcode}
 %
 The problem is that there is no way to statically prove that having an
@@ -343,9 +331,9 @@ reached. The solution is to define \code{property} as the number of instances
 generated so far along with the bound we have chosen in advance:
 %
 \begin{ocamlcode}
-  type variable = Atom : 'a ty -> variable
-  type property = { required : int; produced : int }
-  let equal p1 p2 = p1.produced = p2.produced
-  let is_maximal p = p.produced >= p.required
+type variable = Atom : 'a ty -> variable
+type property = { required : int; produced : int }
+let equal p1 p2 = p1.produced = p2.produced
+let is_maximal p = p.produced >= p.required
 \end{ocamlcode}
 %

@@ -9,20 +9,13 @@ provides iteration facilities over the tree structure through the use of
 \begin{ocamlcode}
 module type RBT = sig
   type 'a t
-
   val empty : 'a t
   val insert : 'a -> 'a t -> 'a t
-
   type direction = Left | Right
   (* type 'a zipper *)
   type 'a ptr (* = 'a t * 'a zipper *)
-
   val zip_open : 'a t -> 'a ptr
-  val zip_close : 'a ptr -> 'a t
-
-  val move_up : 'a ptr -> 'a ptr option
-  val move : direction -> 'a ptr -> 'a ptr option
-end
+  val move : direction -> 'a ptr -> 'a ptr option end
 \end{ocamlcode}
 %
 This examples highlights several strengths of \arti.

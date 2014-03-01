@@ -19,31 +19,23 @@ nonetheless, for a high-level overview of our principles, and paves the way for
 a more thorough discussion of our design (\sref{sec:representation}).
 
 Here is the signature for our module of sorted integer lists.
+The \code{check} function represents the \emph{invariant} that the module
+intends to preserve. The module admits a straightforward implementation, which
+we also show.
 %
 % 7dd765501e4d12d98e9d90a0ece490486cfe6913
 \begin{ocamlcode}
-module type SIList = sig
+module type SIList: sig
   type t
-
   val empty: t
   val add: t -> int -> t
   val check: t -> bool
-end
-\end{ocamlcode}
-%
-The \code{check} function represents the \emph{invariant} that the module
-intends to preserve. The module admits a straightforward implementation.
-%
-\begin{ocamlcode}
-module SIList = struct
+end = struct
   type t = int list
-
   let empty = []
-
   let rec add x = function
     | [] -> [x]
     | t::q -> if t<x then t::add x q else x::t::q
-
   let rec check = function
     | [] | [_] -> true
     | t1::(t2::_ as q) -> t1 <= t2 && check q
@@ -59,11 +51,9 @@ integers we have generated so far, since they are necessary to call the
 types it handles.
 %
 \begin{ocamlcode}
-type 'a ty = {
-  (* Other implementation details omitted *)
+type 'a ty = { (* Other implementation details omitted *)
   mutable enum: 'a list;
-  fresh: ('a list -> 'a) option;
-}
+  fresh: ('a list -> 'a) option; }
 \end{ocamlcode}
 %
 A type descriptor \code{'a ty} keeps track of all the \emph{instances} of
@@ -88,7 +78,6 @@ describes ways to generate instances of type \code{'b} using a function of type
 type (_,_) fn =
 | Ret: 'a ty -> ('a,'a) fn
 | Fun: 'a ty * ('b, 'c) fn -> ('a -> 'b, 'c) fn
-
 (* Helpers for creating [fn]'s. *)
 let (@->) ty fd = Fun (ty,fd)
 let returning ty = Ret ty
@@ -103,15 +92,12 @@ combining that with the other \code{('b, 'c) fn} gives us a way to produce
 elements of type \code{'c}, hence the \code{('a -> 'b, 'c) fn} conclusion.
 %
 \begin{ocamlcode}
-let (>>=) li f = List.flatten (List.map f li)
-
 let rec eval : type a b. (a,b) fn -> a -> b list =
   fun fd f ->
     match fd with
     | Ret _ -> [f]
-    | Fun (ty,fd) ->
-        ty.enum >>= fun e -> eval fd (f e)
-
+    | Fun (ty,fd) -> List.flatten (
+        List.map (fun e -> eval fd (f e)) ty.enum)
 let rec codom : type a b. (a,b) fn -> b ty =
   function
     | Ret ty -> ty
@@ -153,16 +139,11 @@ signature description.
 \begin{ocamlcode}
 type sig_elem = Elem : ('a,'b) fn * 'a -> sig_elem
 type sig_descr = (string * sig_elem) list
-let si_t  =
-  (* create a descriptor for [SIList.t]... *)
-let int_t =
-  (* ...and one for [int], with a [fresh] function *)
-
+let si_t  = (* create a descriptor for [SIList.t] and... *)
+let int_t = (* one for [int], with a [fresh] function *)
 let sig_of_silist = [
   ("empty", (returning si_t, SIList.empty));
-  ("add", (int_t @-> si_t @-> returning si_t, SIList.add));
-]
-
+  ("add", (int_t @-> si_t @-> returning si_t, SIList.add)); ]
 let _ =
   Arti.generate sig_of_silist;
   assert (Arti.counter_example si_t SIList.check = None)
