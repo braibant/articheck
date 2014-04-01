@@ -68,17 +68,17 @@ module AVL = struct
 
   let rec find_min = function
     | L -> assert false
-    | N (L, v, L, _) ->
+    | N (L, v, _, _) ->
         v
-    | N (l, _, r, _) ->
-        min (find_min l) (find_min r)
+    | N (l, _, _, _) ->
+        find_min l
 
   let rec find_max = function
     | L -> assert false
-    | N (L, v, L, _) ->
+    | N (_, v, L, _) ->
         v
-    | N (l, _, r, _) ->
-        max (find_max l) (find_max r)
+    | N (_, _, r, _) ->
+        find_max r
 
   let rec remove k = function
     | L -> L
@@ -95,7 +95,7 @@ module AVL = struct
               let m = find_max l in
               balance (remove m l) m r
           | _, N _ ->
-              let m = find_min l in
+              let m = find_min r in
               balance l m (remove m r)
 
   let rec elements = function
@@ -138,7 +138,7 @@ let int_t =
 let avl_sig = Sig.([
   val_ "empty" (returning avl_t) AVL.empty;
   val_ "insert" (int_t @-> avl_t @-> returning avl_t) AVL.insert;
-  val_ "remove" (int_t @-> avl_t @-> returning avl_t) AVL.insert;
+  val_ "remove" (int_t @-> avl_t @-> returning avl_t) AVL.remove;
 ])
 
 let () = Sig.populate  avl_sig
