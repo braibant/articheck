@@ -3,6 +3,8 @@ module H : sig
   val top : 'a t -> 'a option
   val pop : 'a t -> 'a t option
   val add : 'a -> 'a t -> 'a t
+  val empty: 'a t
+  val merge: 'a t -> 'a t -> 'a t
 
   (** invariant over heaps' structure *)
   val invariant : 'a t -> bool
@@ -50,7 +52,7 @@ end
     | Fork (x,l,r) -> smaller x l && smaller x r
   and smaller x = function
     | Null -> true
-    | Fork (y,l,r) as n -> x <= y && invariant n
+    | Fork (y,_,_) as n -> x <= y && invariant n
 
 
   (** {3 Second, insertion can be done in amortized log time } *)
@@ -82,3 +84,27 @@ end
     <= 2 * log2 (weight h) + 1 + credits h
 
 end
+
+
+(* Testing part *)
+
+open Arti
+
+let sh_t = atom (Ty.declare (): int H.t ty)
+let int_t =
+  let ty : int ty = Ty.declare ~fresh:(fun _ -> Random.int 1000) () in
+  Ty.populate 5 ty;
+  atom ty
+
+let sh_sig = Sig.([
+  val_ "empty" (returning sh_t) H.empty;
+  val_ "add" (int_t @-> sh_t @-> returning sh_t) H.add;
+  val_ "pop" (sh_t @-> returning (option sh_t)) H.pop;
+  val_ "merge" (sh_t @-> sh_t @-> returning sh_t) H.merge;
+])
+
+let () = Sig.populate sh_sig
+
+let () =
+  assert (counter_example "skew heap ok" sh_t H.invariant = None);
+  ()
