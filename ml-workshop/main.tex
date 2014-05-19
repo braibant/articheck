@@ -24,7 +24,7 @@
 \begin{document}
 \date{}
 
-\title{\vspace{-2cm}Well-typed generic fuzzing for APIs}
+\title{\vspace{-2cm}Well-typed generic smart-fuzzing for APIs}
 \author{Thomas Braibant$^{1,2}$
   \quad Jonathan Protzenko$^{2}$
   \quad Gabriel Scherer$^{2}$ \\
@@ -37,7 +37,7 @@
 \section{Introduction}
 Despite recent advances in program certification, testing remains a
 widely-used component of the software development cycle. Various
-flavors of testing exist: popular ones include \emph{unit testing},
+flavours of testing exist: popular ones include \emph{unit testing},
 which consists in manually crafting test cases for specific parts of
 the code base, as well as \emph{QuickCheck-style} testing, where
 instances of a type are automatically generated to serve as test
@@ -67,9 +67,9 @@ user-defined invariants.
 \\
 \textbf{Smart fuzzing.} Second, the first author re-implemented this
 methodology while working at Cryptosense to automate the analysis of
-(security) APIs. More precisely, Cryptosense's library uses an API
-description to automatically exercise vendors' implementations of the
-said API.
+(security) APIs. More precisely, Cryptosense's Testing library uses an
+API description to automatically exercise vendors' implementations of
+the said API.
 
 \section{The essence of external testing}\label{sec:example}
 In the present section, we illustrate the essential idea of external
@@ -91,7 +91,9 @@ Given this signature, all a client can do is combine calls to
 take the point of view that a client should not be able to violate
 type abstractions, e.g., building ill-formed applications like
 \code{add empty empty}. (This is obvious in the context of OCaml, but
-we also apply this rule to the security APIs we consider.)
+we also apply this rule to the security APIs we consider. However, in
+the context of security, well-typed does not necessarily mean
+\emph{well-formed})
 %
 In essence, we want to represent well-typed applications of function
 symbols such as \code{empty} and \code{add}, and thus, we need to
@@ -178,7 +180,7 @@ types to the set of their inhabitants, then an API can be considered
 as a simple state transformer.
 %
 This presentation makes it possible to use an off-the-shelf fixpoint
-library, F. Pottier's \code{Fix} in \acheck as a first
+library, F.~Pottier's \code{Fix} in \acheck as a first
 approximation.
 %
 However, using \code{Fix} does not scale up to the use-cases of
@@ -197,7 +199,8 @@ skew-heaps and BDDs. For instance, we checked that all the BDDs
 created by our library are reduced and ordered.
 \subsection{Examples at Cryptosense}
 We are using Cryptosense's library to reverse engineer (i.e., test)
-the behaviour of hardware devices that implement security APIs.
+the behaviour of hardware devices that implement security APIs like
+PKCS \#11.
 
 \section{Conclusion}
 This talk will expose the key abstractions that are used in the design
