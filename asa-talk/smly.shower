@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html$if(lang)$ lang="$lang$"$endif$>
+<head>
+  <title>$if(title-prefix)$$title-prefix$ - $endif$$pagetitle$</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=680, user-scalable=no">
+  <meta name="generator" content="pandoc" />
+$for(author-meta)$
+  <meta name="author" content="$author-meta$" />
+$endfor$
+$if(date-meta)$
+  <meta name="date" content="$date-meta$" />
+$endif$
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+
+  <link rel="stylesheet" href="/theme/bright/styles/screen.css">
+$if(highlighting-css)$
+  <style type="text/css">
+$highlighting-css$
+  </style>
+$endif$
+  <style>
+    .caption {
+      text-align: left;
+    }
+
+    #Cover h1 {
+      font-size:80px;
+    }
+    #Cover h2 {
+      position:absolute;
+      top:110px;
+      left:103px;
+      color:#FFF;
+      letter-spacing:3px;
+      text-shadow:0 5px 5px rgba(0, 0, 0, 0.3);
+      font: bold 100px/1 "PT Sans Narrow",sans-serif;
+    }
+
+    mark.shower {
+      background: #f99 !important;
+      padding: 3px 7px 0;
+    }
+    mark.pandoc {
+      background: #9f9 !important;
+      padding: 3px 7px 0;
+    }
+    mark.markdown {
+      background: #99f !important;
+      padding: 3px 7px 0;
+    }
+  </style>
+$if(math)$
+  $math$
+$endif$
+$for(header-includes)$
+  $header-includes$
+$endfor$
+$if(duration)$
+  <meta name="duration" content="$duration$" />
+$endif$
+</head>
+<body class="list">
+$for(include-before)$
+$include-before$
+$endfor$
+
+  $if(title)$
+  <header class="caption">
+    <h1 class="title">$title$</h1>
+    <p class="author">
+      <a href="http://twitter.com/smly/">$for(author)$$author$$sep$<br/>$endfor$</a>
+    </p>
+    $if(date)$
+    <p class="date">$date$</p>
+    $endif$
+  </header>
+  $endif$
+
+  <section class="slide cover w h" id="Cover"><div>
+      <header>
+        <h2>Markdown + <br />
+          Pandoc + <br />
+          Shower = XD</h2>
+        </header>
+      <img src="hi.png" alt="">
+  </div></section>
+
+  $body$
+
+  <div class="progress"><div></div></div>
+  <script src="/shower.min.js"></script>
+
+$for(include-after)$
+$include-after$
+$endfor$
+</body>
+</html>
