@@ -18,11 +18,10 @@
 # 	fig2dev -L pdf $< $@
 
 js:
-	pandoc -s -t revealjs asa.pandoc \
+	pandoc -s --template default.revealjs asa.pandoc \
 	-V theme:"night" \
-	--variable transition="none" \
-	--slide-level 2 \
-	--mathjax \
+	--variable revealjs-url="reveal.js" --variable transition="none" \
+	 --slide-level 2 \
 	--highlight-style pygments -o asa.html
 
 beamer:
