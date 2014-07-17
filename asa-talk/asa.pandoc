@@ -1,0 +1,366 @@
+--------------------------------
+<h1> Well-typed smart fuzzing </h1>
+
+<cenrer> Thomas Braibant </center>
+
+<style type="text/css">
+	.reveal h1 { font-size: 2.5em; }
+        .reveal .author {font-size: 1em; color:darkred}
+        .reveal ul {list-style-type: square}
+        .reveal table {margin: 0 auto}
+        .reveal p {text-align:left}
+</style>
+
+# The story
+
+## Interview at Cryptosense
+
+Nice programming problem, came home.
+
+Found two other implementation of the key data-structure.
+
+I want to brag about it.
+
+. . .
+
+How do I check that these three implementations do the same thing?
+
+. . .
+
+
+<div text-align: center> Let's run the implementation together on tests cases. </div>
+
+## Writing test cases is a pain
+
+Can I generate test cases automatically?
+
+. . .
+
+**Yes**: QuickCheck.
+
+    - Generate test cases for a function, by inspecting the types of its arguments.
+
+. . .
+
+**But** I want to
+
+    - generate test cases for several functions (an API)
+    - without knowing the definition of the types
+
+
+
+## Some friends
+
+<img width="40%"  src="img/JP.jpg"
+     display: block; margin-left: auto; margin-right: auto >
+<img width="40%"  src="img/scherer.jpg"
+     display: block; margin-left: auto; margin-right: auto >
+
+<div text-align: center>Jonathan Protzenko and Gabriel Scherer </div>
+
+## Articheck
+
+A library to generate test cases for **safety** properties
+
+|            | Quickcheck | Articheck |
+|------------|----------------------------|-----------|
+| Test       | Function (Internal)        | APIs   (External)   |
+| How        | Generate random values     | Use the API to build values       |
+| Knowing    | Type definitions           | The interface exposed to the user |
+
+## The pitch
+
+
+
+  + Generate random arguments and call the function -> Fuzzing
+  + Unlikely to succeed (one cannot squeeze an apple)
+  + Use the types to reduce the fuzzing space! (Well-typed does not
+    mean well-formed, though)
++ What is specific to data-structures?
+  Nothing.
++ The pitch: We have a principled way to exercise an API in a type
+  safe manner, both for safety and security purposes.
++ The end of the story: Wrote a paper about that with two friends,
+  then left academia to work at Cryptosense. In this talk, we will see
+  how our naive academic was refined by working in an industrial
+  context.
+
+# Describing APIs
+
+## What's an API?
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ {.ocaml}
+(* Mock API *)
+type template
+type key
+type text
+val generate_key: template -> key
+val wrap: key -> key -> text
+val encrypt: key -> text -> text
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In this talk, APIs are a set of functions in a first-order language.
+
+## A DSL for describing APIs
+
+We need to describe *types* and *functions*.
+
+. . .
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ {.ocaml}
+type 'a ty =
+{name: string;
+ mutable content: 'a list}
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+. . .
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ {.ocaml}
+type 'a descr =
+| return : 'a ty -> 'a descr
+| @~> : 'a ty * 'b descr -> ('a -> 'b) descr
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+. . .
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ {.ocaml}
+type command = Command : (string * 'a descr * 'a) -> command
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+. . .
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ {.ocaml}
+type api = command list
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## Example
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ {.ocaml}
+let int_ty =
+{name = "int";
+ content = [1;2;3;42]}
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ {.ocaml}
+let add = Command ("add", (int_ty @~> int_ty @~> int_ty), (+))
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+. . .
+
+<p style="text-align:left">
+**Monkey job**: pick one int, pick one int, apply the function, if the
+result is new, add it to the set of possible choices. Loop.
+</p>
+
+. . .
+
+<p style="text-align:left">
+By repeatingly applying the functions of our APIs (here, add), we can
+build *new instances* of the type int.
+</p>
+
+# The DSL (almost for real)
+
+## The DSL of types
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ {.ocaml}
+type _ ty =
+| Abstract: 'a strategy -> 'a ty
+| Bijection: 'a ty * ('a -> 'b) * ('b -> 'a) -> 'b ty
+| Sum: 'a ty * 'b ty -> ('a,'b) Either.t ty
+| Record: 'a record -> 'a ty
+| Filter: 'a ty * ('a -> bool) -> 'a ty
+and _ record =
+| Build: string * 'a t -> 'a record
+| Field: string * 'a t * 'b record -> '(a * 'b) record
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+. . .
+
+**Dolev-Yao style**
+
+    - the attacker can open products and sums (e.g., change the PIN block format a PIN block pretend to have).
+    - the attacker cannot modify abstract values
+
+## The DSL of APIs
+
+**An example**
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ {.ocaml}
+let open Command in declare
+  ~ident:"generate_key"
+  ~pretty:"[A0] Generate key"
+  ("key_type"  -: Key_type.typ @->
+   "key_scheme" -: Key_scheme.typ @~>
+   (Key.typ, Error.typ))
+  implementation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Limited to **First-order functions**
+
+## Use cases
+
+**Articheck**: testing data-structures implemented in OCaml
+
+    - Red-black trees, skewed heaps, BDDs, AVLs (using randomization)
+
+**Cryptosense**: fuzzing cryptographic APIs
+
+    - Cryptographic APIs (without randomization)
+
+# Taming the combinatorial explosion
+
+## The problems
+
+- Need to enumerate the **domains** of functions
+- The **combinatorial** space is made of two kind of elements
+    - **Constants** (known in advance, e.g., templates, key types)
+    - **Variables** (populated dynamically, e.g., handles, ciphertexts)
+- "Good" test coverage (e.g., templates)
+- Reproducibility (i.e., avoid random testing)
+
+## Feature \#1: a library of enumerators
+
+**Low memory footprint**
+
+    - if possible, constant space.
+
+**Efficient access**
+
+    - if possible, constant access time to any element.
+
+## Quick peek (1/3)
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ {.ocaml}
+(* The usual suspects... *)
+type 'a t
+val nth: 'a t -> int -> 'a
+val cardinal: 'a t -> int
+val bool: bool t
+val range: int -> int -> int t
+val option: 'a t -> 'a option t
+val make: 'a list -> 'a t
+val map: ('a -> 'b) -> 'a t -> 'b t
+val append: 'a t -> 'a t -> 'a t
+val interleave: 'a t -> 'a t -> 'a t
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## Quick peek (2/3)
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ {.ocaml}
+(* and some uncommon combinators. *)
+val record: 'a record -> 'a t t
+val subset: 'a t list -> 'a list t t
+val squash: 'a t t -> 'a t
+val round_robin: 'a t t -> 'a t
+(* Example *)
+# squash (subset [range 1 3; range 4 5])
+[];
+[ 1 ]; [ 2 ]; [ 3 ]; [ 4 ]; [ 5 ];
+[ 1; 4 ]; [ 2; 4 ]; [ 3; 4 ]; [ 1; 5 ]; [ 2; 5 ]; [ 3; 5 ]
+
+# round_robin (subset [range 1 3; range 4 5; range 6 7])
+[];
+[ 1 ]; [ 4 ]; [ 6 ]; [ 1; 4 ]; [ 1; 6 ]; [ 4; 6 ]; [ 1; 4; 6 ];
+[ 2 ]; [ 5 ]; [ 2; 4 ]; [ 2; 6 ]; [ 5; 6 ]; [ 2; 4; 6 ];
+[ 3 ]; [ 3; 4 ]; [ 3; 6 ]; [ 3; 4; 6 ];
+[ 1; 5 ]; [ 1; 5; 6 ] ...
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Crucial** to enumerate templates (list of attributes) efficiently!
+
+## Quick peek (3/3)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ {.ocaml}
+val filter: ('a->bool) -> 'a t -> 'a t
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Very useful** in practice, but hard to implement efficiently.
+
+    - Need to fold through all the enumerator.
+    - Allocates memory linearly w.r.t. the size of the result.
+
+## Feature \#2: a library for combinatorial exploration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ {.ocaml}
+(* Combinators to describe the combinatorial problem *)
+type 'a s
+val static: 'a Enumerator.t -> 'a s
+val dynamic: 'a dynamic -> 'a s
+val filter: ('a -> bool) -> 'a s -> 'a s
+val map: ('a -> 'b) -> 'a s -> 'b s
+val sum: 'a s -> 'b s -> ('a,'b) Either.t s
+val product: 'a s -> 'b s -> ('a * 'b) s
+
+(* Add a new element *)
+val add: 'a -> 'a dynamic -> unit
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+. . .
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ {.ocaml}
+(* Imperative state of the exploration *)
+type 'a t
+val start: 'a s -> 'a t
+val take: 'a t -> 'a option
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+. . .
+
+**Update** the imperative state each time a new element is added.
+
+## The secret ingredient (1/2)
+
+- The imperative state is roughly a enumerator and an index.
+- When the enumerator is empty, compute an enumerator of the next elements to consider:
+
+    - avoid redundancy with what has been done already;
+    - maximize **throughput**
+
+## The secret ingredient (2/2)
+
+$\begin{aligned}
+        \delta_a(k) &~= \emptyset \\
+        \delta_a(v::a) &~= \{v\} \\
+        \delta_a(b) &~= \emptyset \\
+        \delta_a(f~b) &~= f (\delta_a(b)) \\
+        \delta_a(b \times c) &~= (\delta_a(b) \times c) \cup (b \times \delta_a(c)) \\
+        ... &~=~...
+\end{aligned}$
+
+## The result (opencryptoki)
+
+<small>
+
+Command                         | Test    | Success | Errors  |Failures | Queue length | Time
+--------------------------------|--------:|--------:|--------:|----:|-------------:|--------:
+C_GetTokenInfo                  |     1 T |     1 S |         |     |              |    0.001s
+C_GenerateKey                   | 78500 T | 78500 S |         |     |     807235 Q |   27.521s
+C_GenerateKeyPair               | 78500 T | 39250 S | 39250 E |     |    9487438 Q | 1302.322s
+C_CreateObject (DES)            | 78500 T | 78500 S |         |     |      98647 Q |   17.890s
+C_CreateObject (DES3)           | 78499 T | 78499 S |         |     |      98648 Q |   11.660s
+C_CreateObject (AES)            | 78499 T | 78499 S |         |     |     452942 Q |   14.110s
+C_CreateObject (RSA, public)    |   729 T |   729 S |         |     |              |    3.941s
+C_CreateObject (RSA, private)   |  6561 T |  6561 S |         |     |              |    3.842s
+C_Encrypt (with symmetric key)  | 78445 T |  5013 S | 73432 E |     |      50642 Q |    9.130s
+C_Encrypt (with asymmetric key) | 78499 T | 40106 S | 38393 E |     |      16529 Q |  351.269s
+C_Decrypt (with symmetric key)  | 56814 T |  2743 S | 54071 E |     | 4113990653 Q |    8.561s
+C_Decrypt (with asymmetric key) | 76741 T |  1648 S | 75090 E | 3 F | 8707637763 Q |  340.883s
+C_WrapKey (with symmetric key)  | 77482 T |  1597 S | 75881 E | 4 F |   13814585 Q |   39.034s
+C_WrapKey (with asymmetric key) | 75238 T | 34753 S | 40485 E |     | 2551340477 Q |  235.050s
+C_GetAttributeValue (key value) | 78493 T | 28639 S | 49854 E |     |      38998 Q |  166.660s
+C_SetAttributeValue             | 78499 T |  4758 S | 73741 E |     |    1338677 Q |   54.853s
+
+</small>
+
+## The executive result
+
+Calls  |Total time| API time  | Overhead |
+------:|---------:|----------:|---------:|
+10^6   |2686s     | 2586s     |        3%|
+
+
+# Wrapping up
+
+## Cryptosense analyzer
+
++ Data structures APIs
++ The Cryptosense pipeline: Testing -> Learning -> Model checking
++ API fuzzing as a service: RESTful
