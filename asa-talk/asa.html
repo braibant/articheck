@@ -6,13 +6,13 @@
   <title></title>
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <link rel="stylesheet" href="reveal.js/css/reveal.min.css"/>
     <style type="text/css">code{white-space: pre;}</style>
     <style type="text/css">
 table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
   margin: 0; padding: 0; vertical-align: baseline; border: none; }
-table.sourceCode { width: 100%; }
+table.sourceCode { width: 100%; line-height: 100%; }
 td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
 td.sourceCode { padding-left: 5px; }
 code > span.kw { color: #007020; font-weight: bold; }
@@ -48,12 +48,13 @@ code > span.er { color: #ff0000; font-weight: bold; }
     <div class="slides">
 
 
-<hr />
-<h1>
+<section class="slide level2">
+
+<h1> 
 Well-typed smart fuzzing
 </h1>
 
-<center>
+<center> 
 Thomas Braibant
 </center>
 
@@ -65,39 +66,71 @@ Thomas Braibant
         .reveal p {text-align:left}
 </style>
 
-<h1 id="the-story">The story</h1>
-<h2 id="interview-at-cryptosense">Interview at Cryptosense</h2>
+</section>
+<section><section id="the-story" class="titleslide slide level1"><h1>The story</h1></section><section id="interview-at-cryptosense" class="slide level2">
+<h1>Interview at Cryptosense</h1>
 <p>Nice programming problem, came home.</p>
 <p>Found two other implementation of the key data-structure.</p>
 <p>I want to brag about it.</p>
-<p>. . .</p>
+<div class="fragment">
 <p>How do I check that these three implementations do the same thing?</p>
-<p>. . .</p>
-<div text-align: center>
+</div>
+<div class="fragment">
+<div text-align:="" center="">
 Let's run the implementation together on tests cases.
 </div>
-
-<h2 id="writing-test-cases-is-a-pain">Writing test cases is a pain</h2>
+</div>
+</section><section id="writing-test-cases-is-a-pain" class="slide level2">
+<h1>Writing test cases is a pain</h1>
 <p>Can I generate test cases automatically?</p>
-<p>. . .</p>
+<div class="fragment">
 <p><strong>Yes</strong>: QuickCheck.</p>
 <pre><code>- Generate test cases for a function, by inspecting the types of its arguments.</code></pre>
-<p>. . .</p>
+</div>
+<div class="fragment">
 <p><strong>But</strong> I want to</p>
 <pre><code>- generate test cases for several functions (an API)
 - without knowing the definition of the types</code></pre>
-<h2 id="some-friends">Some friends</h2>
-<img width="40%"  src="img/JP.jpg"
+</div>
+</section><section id="some-friends" class="slide level2">
+<h1>Some friends</h1>
+<p><img width="40%"  src="img/JP.jpg"
      display: block; margin-left: auto; margin-right: auto > <img width="40%"  src="img/scherer.jpg"
-     display: block; margin-left: auto; margin-right: auto >
-<div text-align: center>
+     display: block; margin-left: auto; margin-right: auto ></p>
+<div text-align:="" center="">
 Jonathan Protzenko and Gabriel Scherer
 </div>
-
-<h2 id="articheck">Articheck</h2>
+</section><section id="articheck" class="slide level2">
+<h1>Articheck</h1>
 <p>A library to generate test cases for <strong>safety</strong> properties</p>
-<p>| | Quickcheck | Articheck | |------------|----------------------------|-----------| | Test | Function (Internal) | APIs (External) | | How | Generate random values | Use the API to build values | | Knowing | Type definitions | The interface exposed to the user |</p>
-<h2 id="the-pitch">The pitch</h2>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;"></th>
+<th style="text-align: left;">Quickcheck</th>
+<th style="text-align: left;">Articheck</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Test</td>
+<td style="text-align: left;">Function (Internal)</td>
+<td style="text-align: left;">APIs (External)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">How</td>
+<td style="text-align: left;">Generate random values</td>
+<td style="text-align: left;">Use the API to build values</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Knowing</td>
+<td style="text-align: left;">Type definitions</td>
+<td style="text-align: left;">The interface exposed to the user</td>
+</tr>
+</tbody>
+</table>
+</section><section id="the-pitch" class="slide level2">
+<h1>The pitch</h1>
 <ul>
 <li>Generate random arguments and call the function -&gt; Fuzzing</li>
 <li>Unlikely to succeed (one cannot squeeze an apple)</li>
@@ -106,8 +139,9 @@ Jonathan Protzenko and Gabriel Scherer
 <li>The pitch: We have a principled way to exercise an API in a type safe manner, both for safety and security purposes.</li>
 <li>The end of the story: Wrote a paper about that with two friends, then left academia to work at Cryptosense. In this talk, we will see how our naive academic was refined by working in an industrial context.</li>
 </ul>
-<h1 id="describing-apis">Describing APIs</h1>
-<h2 id="whats-an-api">What's an API?</h2>
+</section></section>
+<section><section id="describing-apis" class="titleslide slide level1"><h1>Describing APIs</h1></section><section id="whats-an-api" class="slide level2">
+<h1>What's an API?</h1>
 <pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="co">(* Mock API *)</span>
 <span class="kw">type</span> template
 <span class="kw">type</span> key
@@ -116,51 +150,62 @@ Jonathan Protzenko and Gabriel Scherer
 <span class="kw">val</span> wrap: key -&gt; key -&gt; text
 <span class="kw">val</span> encrypt: key -&gt; text -&gt; text</code></pre>
 <p>In this talk, APIs are a set of functions in a first-order language.</p>
-<h2 id="a-dsl-for-describing-apis">A DSL for describing APIs</h2>
+</section><section id="a-dsl-for-describing-apis" class="slide level2">
+<h1>A DSL for describing APIs</h1>
 <p>We need to describe <em>types</em> and <em>functions</em>.</p>
-<p>. . .</p>
+<div class="fragment">
 <pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="kw">type</span> &#39;a ty =
 {name: <span class="dt">string</span>;
  <span class="kw">mutable</span> content: &#39;a <span class="dt">list</span>}</code></pre>
-<p>. . .</p>
+</div>
+<div class="fragment">
 <pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="kw">type</span> &#39;a descr =
 | return : &#39;a ty -&gt; &#39;a descr
 | @~&gt; : &#39;a ty * &#39;b descr -&gt; (&#39;a -&gt; &#39;b) descr</code></pre>
-<p>. . .</p>
+</div>
+<div class="fragment">
 <pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="kw">type</span> command = <span class="dt">Command</span> : (<span class="dt">string</span> * &#39;a descr * &#39;a) -&gt; command</code></pre>
-<p>. . .</p>
+</div>
+<div class="fragment">
 <pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="kw">type</span> api = command <span class="dt">list</span></code></pre>
-<h2 id="example">Example</h2>
+</div>
+</section><section id="example" class="slide level2">
+<h1>Example</h1>
 <pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="kw">let</span> int_ty =
 {name = <span class="st">&quot;int&quot;</span>;
- content = [1;2;3;42]}</code></pre>
+ content = [<span class="dv">1</span>;<span class="dv">2</span>;<span class="dv">3</span>;<span class="dv">42</span>]}</code></pre>
 <pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="kw">let</span> add = <span class="dt">Command</span> (<span class="st">&quot;add&quot;</span>, (int_ty @~&gt; int_ty @~&gt; int_ty), (+))</code></pre>
-<p>. . .</p>
+<div class="fragment">
 <p style="text-align:left">
 <strong>Monkey job</strong>: pick one int, pick one int, apply the function, if the result is new, add it to the set of possible choices. Loop.
 </p>
 
-<p>. . .</p>
+</div>
+<div class="fragment">
 <p style="text-align:left">
 By repeatingly applying the functions of our APIs (here, add), we can build <em>new instances</em> of the type int.
 </p>
 
-<h1 id="the-dsl-almost-for-real">The DSL (almost for real)</h1>
-<h2 id="the-dsl-of-types">The DSL of types</h2>
+</div>
+</section></section>
+<section><section id="the-dsl-almost-for-real" class="titleslide slide level1"><h1>The DSL (almost for real)</h1></section><section id="the-dsl-of-types" class="slide level2">
+<h1>The DSL of types</h1>
 <pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="kw">type</span> _ ty =
-| <span class="dt">Abstract:</span> &#39;a strategy -&gt; &#39;a ty
-| <span class="dt">Bijection:</span> &#39;a ty * (&#39;a -&gt; &#39;b) * (&#39;b -&gt; &#39;a) -&gt; &#39;b ty
-| <span class="dt">Sum:</span> &#39;a ty * &#39;b ty -&gt; (&#39;a,&#39;b) Either<span class="kw">.</span>t ty
-| <span class="dt">Record:</span> &#39;a record -&gt; &#39;a ty
-| <span class="dt">Filter:</span> &#39;a ty * (&#39;a -&gt; <span class="dt">bool</span>) -&gt; &#39;a ty
+| <span class="dt">Abstract</span>: &#39;a strategy -&gt; &#39;a ty
+| <span class="dt">Bijection</span>: &#39;a ty * (&#39;a -&gt; &#39;b) * (&#39;b -&gt; &#39;a) -&gt; &#39;b ty
+| <span class="dt">Sum</span>: &#39;a ty * &#39;b ty -&gt; (&#39;a,&#39;b) Either<span class="kw">.</span>t ty
+| <span class="dt">Record</span>: &#39;a record -&gt; &#39;a ty
+| <span class="dt">Filter</span>: &#39;a ty * (&#39;a -&gt; <span class="dt">bool</span>) -&gt; &#39;a ty
 <span class="kw">and</span> _ record =
-| <span class="dt">Build:</span> <span class="dt">string</span> * &#39;a t -&gt; &#39;a record
-| <span class="dt">Field:</span> <span class="dt">string</span> * &#39;a t * &#39;b record -&gt; &#39;(a * &#39;b) record</code></pre>
-<p>. . .</p>
+| <span class="dt">Build</span>: <span class="dt">string</span> * &#39;a t -&gt; &#39;a record
+| <span class="dt">Field</span>: <span class="dt">string</span> * &#39;a t * &#39;b record -&gt; &#39;(a * &#39;b) record</code></pre>
+<div class="fragment">
 <p><strong>Dolev-Yao style</strong></p>
 <pre><code>- the attacker can open products and sums (e.g., change the PIN block format a PIN block pretend to have).
 - the attacker cannot modify abstract values</code></pre>
-<h2 id="the-dsl-of-apis">The DSL of APIs</h2>
+</div>
+</section><section id="the-dsl-of-apis" class="slide level2">
+<h1>The DSL of APIs</h1>
 <p><strong>An example</strong></p>
 <pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="kw">let</span> <span class="ot">open</span> Command <span class="kw">in</span> declare
   ~ident:<span class="st">&quot;generate_key&quot;</span>
@@ -170,13 +215,15 @@ By repeatingly applying the functions of our APIs (here, add), we can build <em>
    (Key<span class="kw">.</span>typ, Error<span class="kw">.</span>typ))
   implementation</code></pre>
 <p>Limited to <strong>First-order functions</strong></p>
-<h2 id="use-cases">Use cases</h2>
+</section><section id="use-cases" class="slide level2">
+<h1>Use cases</h1>
 <p><strong>Articheck</strong>: testing data-structures implemented in OCaml</p>
 <pre><code>- Red-black trees, skewed heaps, BDDs, AVLs (using randomization)</code></pre>
 <p><strong>Cryptosense</strong>: fuzzing cryptographic APIs</p>
 <pre><code>- Cryptographic APIs (without randomization)</code></pre>
-<h1 id="taming-the-combinatorial-explosion">Taming the combinatorial explosion</h1>
-<h2 id="the-problems">The problems</h2>
+</section></section>
+<section><section id="taming-the-combinatorial-explosion" class="titleslide slide level1"><h1>Taming the combinatorial explosion</h1></section><section id="the-problems" class="slide level2">
+<h1>The problems</h1>
 <ul>
 <li>Need to enumerate the <strong>domains</strong> of functions</li>
 <li>The <strong>combinatorial</strong> space is made of two kind of elements
@@ -187,12 +234,14 @@ By repeatingly applying the functions of our APIs (here, add), we can build <em>
 <li>&quot;Good&quot; test coverage (e.g., templates)</li>
 <li>Reproducibility (i.e., avoid random testing)</li>
 </ul>
-<h2 id="feature-1-a-library-of-enumerators">Feature #1: a library of enumerators</h2>
+</section><section id="feature-1-a-library-of-enumerators" class="slide level2">
+<h1>Feature #1: a library of enumerators</h1>
 <p><strong>Low memory footprint</strong></p>
 <pre><code>- if possible, constant space.</code></pre>
 <p><strong>Efficient access</strong></p>
 <pre><code>- if possible, constant access time to any element.</code></pre>
-<h2 id="quick-peek-13">Quick peek (1/3)</h2>
+</section><section id="quick-peek-13" class="slide level2">
+<h1>Quick peek (1/3)</h1>
 <pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="co">(* The usual suspects... *)</span>
 <span class="kw">type</span> &#39;a t
 <span class="kw">val</span> nth: &#39;a t -&gt; <span class="dt">int</span> -&gt; &#39;a
@@ -204,31 +253,34 @@ By repeatingly applying the functions of our APIs (here, add), we can build <em>
 <span class="kw">val</span> map: (&#39;a -&gt; &#39;b) -&gt; &#39;a t -&gt; &#39;b t
 <span class="kw">val</span> append: &#39;a t -&gt; &#39;a t -&gt; &#39;a t
 <span class="kw">val</span> interleave: &#39;a t -&gt; &#39;a t -&gt; &#39;a t</code></pre>
-<h2 id="quick-peek-23">Quick peek (2/3)</h2>
+</section><section id="quick-peek-23" class="slide level2">
+<h1>Quick peek (2/3)</h1>
 <pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="co">(* and some uncommon combinators. *)</span>
 <span class="kw">val</span> record: &#39;a record -&gt; &#39;a t t
 <span class="kw">val</span> subset: &#39;a t <span class="dt">list</span> -&gt; &#39;a <span class="dt">list</span> t t
 <span class="kw">val</span> squash: &#39;a t t -&gt; &#39;a t
 <span class="kw">val</span> round_robin: &#39;a t t -&gt; &#39;a t
 <span class="co">(* Example *)</span>
-# squash (subset [range 1 3; range 4 5])
+# squash (subset [range <span class="dv">1</span> <span class="dv">3</span>; range <span class="dv">4</span> <span class="dv">5</span>])
 [];
-[ 1 ]; [ 2 ]; [ 3 ]; [ 4 ]; [ 5 ];
-[ 1; 4 ]; [ 2; 4 ]; [ 3; 4 ]; [ 1; 5 ]; [ 2; 5 ]; [ 3; 5 ]
+[ <span class="dv">1</span> ]; [ <span class="dv">2</span> ]; [ <span class="dv">3</span> ]; [ <span class="dv">4</span> ]; [ <span class="dv">5</span> ];
+[ <span class="dv">1</span>; <span class="dv">4</span> ]; [ <span class="dv">2</span>; <span class="dv">4</span> ]; [ <span class="dv">3</span>; <span class="dv">4</span> ]; [ <span class="dv">1</span>; <span class="dv">5</span> ]; [ <span class="dv">2</span>; <span class="dv">5</span> ]; [ <span class="dv">3</span>; <span class="dv">5</span> ]
 
-# round_robin (subset [range 1 3; range 4 5; range 6 7])
+# round_robin (subset [range <span class="dv">1</span> <span class="dv">3</span>; range <span class="dv">4</span> <span class="dv">5</span>; range <span class="dv">6</span> <span class="dv">7</span>])
 [];
-[ 1 ]; [ 4 ]; [ 6 ]; [ 1; 4 ]; [ 1; 6 ]; [ 4; 6 ]; [ 1; 4; 6 ];
-[ 2 ]; [ 5 ]; [ 2; 4 ]; [ 2; 6 ]; [ 5; 6 ]; [ 2; 4; 6 ];
-[ 3 ]; [ 3; 4 ]; [ 3; 6 ]; [ 3; 4; 6 ];
-[ 1; 5 ]; [ 1; 5; 6 ] ...</code></pre>
+[ <span class="dv">1</span> ]; [ <span class="dv">4</span> ]; [ <span class="dv">6</span> ]; [ <span class="dv">1</span>; <span class="dv">4</span> ]; [ <span class="dv">1</span>; <span class="dv">6</span> ]; [ <span class="dv">4</span>; <span class="dv">6</span> ]; [ <span class="dv">1</span>; <span class="dv">4</span>; <span class="dv">6</span> ];
+[ <span class="dv">2</span> ]; [ <span class="dv">5</span> ]; [ <span class="dv">2</span>; <span class="dv">4</span> ]; [ <span class="dv">2</span>; <span class="dv">6</span> ]; [ <span class="dv">5</span>; <span class="dv">6</span> ]; [ <span class="dv">2</span>; <span class="dv">4</span>; <span class="dv">6</span> ];
+[ <span class="dv">3</span> ]; [ <span class="dv">3</span>; <span class="dv">4</span> ]; [ <span class="dv">3</span>; <span class="dv">6</span> ]; [ <span class="dv">3</span>; <span class="dv">4</span>; <span class="dv">6</span> ];
+[ <span class="dv">1</span>; <span class="dv">5</span> ]; [ <span class="dv">1</span>; <span class="dv">5</span>; <span class="dv">6</span> ] ...</code></pre>
 <p><strong>Crucial</strong> to enumerate templates (list of attributes) efficiently!</p>
-<h2 id="quick-peek-33">Quick peek (3/3)</h2>
-<pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="kw">val</span> filter: (&#39;a-&gt;bool) -&gt; &#39;a t -&gt; &#39;a t</code></pre>
+</section><section id="quick-peek-33" class="slide level2">
+<h1>Quick peek (3/3)</h1>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="kw">val</span> filter: (&#39;a-&gt;<span class="dt">bool</span>) -&gt; &#39;a t -&gt; &#39;a t</code></pre>
 <p><strong>Very useful</strong> in practice, but hard to implement efficiently.</p>
 <pre><code>- Need to fold through all the enumerator.
 - Allocates memory linearly w.r.t. the size of the result.</code></pre>
-<h2 id="feature-2-a-library-for-combinatorial-exploration">Feature #2: a library for combinatorial exploration</h2>
+</section><section id="feature-2-a-library-for-combinatorial-exploration" class="slide level2">
+<h1>Feature #2: a library for combinatorial exploration</h1>
 <pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="co">(* Combinators to describe the combinatorial problem *)</span>
 <span class="kw">type</span> &#39;a s
 <span class="kw">val</span> static: &#39;a Enumerator<span class="kw">.</span>t -&gt; &#39;a s
@@ -240,14 +292,17 @@ By repeatingly applying the functions of our APIs (here, add), we can build <em>
 
 <span class="co">(* Add a new element *)</span>
 <span class="kw">val</span> add: &#39;a -&gt; &#39;a dynamic -&gt; <span class="dt">unit</span></code></pre>
-<p>. . .</p>
+<div class="fragment">
 <pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="co">(* Imperative state of the exploration *)</span>
 <span class="kw">type</span> &#39;a t
 <span class="kw">val</span> start: &#39;a s -&gt; &#39;a t
 <span class="kw">val</span> take: &#39;a t -&gt; &#39;a <span class="dt">option</span></code></pre>
-<p>. . .</p>
+</div>
+<div class="fragment">
 <p><strong>Update</strong> the imperative state each time a new element is added.</p>
-<h2 id="the-secret-ingredient-12">The secret ingredient (1/2)</h2>
+</div>
+</section><section id="the-secret-ingredient-12" class="slide level2">
+<h1>The secret ingredient (1/2)</h1>
 <ul>
 <li>The imperative state is roughly a enumerator and an index.</li>
 <li><p>When the enumerator is empty, compute an enumerator of the next elements to consider:</p>
@@ -256,21 +311,201 @@ By repeatingly applying the functions of our APIs (here, add), we can build <em>
 <li>maximize <strong>throughput</strong></li>
 </ul></li>
 </ul>
-<h2 id="the-secret-ingredient-22">The secret ingredient (2/2)</h2>
-<p><span class="math">$\begin{aligned} \delta_a(k) &amp;~= \emptyset \\ \delta_a(v::a) &amp;~= \{v\} \\ \delta_a(b) &amp;~= \emptyset \\ \delta_a(f~b) &amp;~= f (\delta_a(b)) \\ \delta_a(b \times c) &amp;~= (\delta_a(b) \times c) \cup (b \times \delta_a(c)) \\ ... &amp;~=~... \end{aligned}$</span></p>
-<h2 id="the-result-opencryptoki">The result (opencryptoki)</h2>
-<small>
-<p>Command | Test | Success | Errors |Failures | Queue length | Time --------------------------------|--------:|--------:|--------:|----:|-------------:|--------: C_GetTokenInfo | 1 T | 1 S | | | | 0.001s C_GenerateKey | 78500 T | 78500 S | | | 807235 Q | 27.521s C_GenerateKeyPair | 78500 T | 39250 S | 39250 E | | 9487438 Q | 1302.322s C_CreateObject (DES) | 78500 T | 78500 S | | | 98647 Q | 17.890s C_CreateObject (DES3) | 78499 T | 78499 S | | | 98648 Q | 11.660s C_CreateObject (AES) | 78499 T | 78499 S | | | 452942 Q | 14.110s C_CreateObject (RSA, public) | 729 T | 729 S | | | | 3.941s C_CreateObject (RSA, private) | 6561 T | 6561 S | | | | 3.842s C_Encrypt (with symmetric key) | 78445 T | 5013 S | 73432 E | | 50642 Q | 9.130s C_Encrypt (with asymmetric key) | 78499 T | 40106 S | 38393 E | | 16529 Q | 351.269s C_Decrypt (with symmetric key) | 56814 T | 2743 S | 54071 E | | 4113990653 Q | 8.561s C_Decrypt (with asymmetric key) | 76741 T | 1648 S | 75090 E | 3 F | 8707637763 Q | 340.883s C_WrapKey (with symmetric key) | 77482 T | 1597 S | 75881 E | 4 F | 13814585 Q | 39.034s C_WrapKey (with asymmetric key) | 75238 T | 34753 S | 40485 E | | 2551340477 Q | 235.050s C_GetAttributeValue (key value) | 78493 T | 28639 S | 49854 E | | 38998 Q | 166.660s C_SetAttributeValue | 78499 T | 4758 S | 73741 E | | 1338677 Q | 54.853s</p>
-</small>
-<h2 id="the-executive-result">The executive result</h2>
-<p>Calls |Total time| API time | Overhead | ------:|---------:|----------:|---------:| 10^6 |2686s | 2586s | 3%|</p>
-<h1 id="wrapping-up">Wrapping up</h1>
-<h2 id="cryptosense-analyzer">Cryptosense analyzer</h2>
+</section><section id="the-secret-ingredient-22" class="slide level2">
+<h1>The secret ingredient (2/2)</h1>
+<p><span class="math">$\begin{aligned}         \delta_a(k) &amp;~= \emptyset \\         \delta_a(v::a) &amp;~= \{v\} \\         \delta_a(b) &amp;~= \emptyset \\         \delta_a(f~b) &amp;~= f (\delta_a(b)) \\         \delta_a(b \times c) &amp;~= (\delta_a(b) \times c) \cup (b \times \delta_a(c)) \\         ... &amp;~=~... \end{aligned}$</span></p>
+</section><section id="the-result-opencryptoki" class="slide level2">
+<h1>The result (opencryptoki)</h1>
+<p><small></p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Command</th>
+<th style="text-align: right;">Test</th>
+<th style="text-align: right;">Success</th>
+<th style="text-align: right;">Errors</th>
+<th style="text-align: right;">Failures</th>
+<th style="text-align: right;">Queue length</th>
+<th style="text-align: right;">Time</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">C_GetTokenInfo</td>
+<td style="text-align: right;">1 T</td>
+<td style="text-align: right;">1 S</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">0.001s</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">C_GenerateKey</td>
+<td style="text-align: right;">78500 T</td>
+<td style="text-align: right;">78500 S</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">807235 Q</td>
+<td style="text-align: right;">27.521s</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">C_GenerateKeyPair</td>
+<td style="text-align: right;">78500 T</td>
+<td style="text-align: right;">39250 S</td>
+<td style="text-align: right;">39250 E</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">9487438 Q</td>
+<td style="text-align: right;">1302.322s</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">C_CreateObject (DES)</td>
+<td style="text-align: right;">78500 T</td>
+<td style="text-align: right;">78500 S</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">98647 Q</td>
+<td style="text-align: right;">17.890s</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">C_CreateObject (DES3)</td>
+<td style="text-align: right;">78499 T</td>
+<td style="text-align: right;">78499 S</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">98648 Q</td>
+<td style="text-align: right;">11.660s</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">C_CreateObject (AES)</td>
+<td style="text-align: right;">78499 T</td>
+<td style="text-align: right;">78499 S</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">452942 Q</td>
+<td style="text-align: right;">14.110s</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">C_CreateObject (RSA, public)</td>
+<td style="text-align: right;">729 T</td>
+<td style="text-align: right;">729 S</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">3.941s</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">C_CreateObject (RSA, private)</td>
+<td style="text-align: right;">6561 T</td>
+<td style="text-align: right;">6561 S</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">3.842s</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">C_Encrypt (with symmetric key)</td>
+<td style="text-align: right;">78445 T</td>
+<td style="text-align: right;">5013 S</td>
+<td style="text-align: right;">73432 E</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">50642 Q</td>
+<td style="text-align: right;">9.130s</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">C_Encrypt (with asymmetric key)</td>
+<td style="text-align: right;">78499 T</td>
+<td style="text-align: right;">40106 S</td>
+<td style="text-align: right;">38393 E</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">16529 Q</td>
+<td style="text-align: right;">351.269s</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">C_Decrypt (with symmetric key)</td>
+<td style="text-align: right;">56814 T</td>
+<td style="text-align: right;">2743 S</td>
+<td style="text-align: right;">54071 E</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">4113990653 Q</td>
+<td style="text-align: right;">8.561s</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">C_Decrypt (with asymmetric key)</td>
+<td style="text-align: right;">76741 T</td>
+<td style="text-align: right;">1648 S</td>
+<td style="text-align: right;">75090 E</td>
+<td style="text-align: right;">3 F</td>
+<td style="text-align: right;">8707637763 Q</td>
+<td style="text-align: right;">340.883s</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">C_WrapKey (with symmetric key)</td>
+<td style="text-align: right;">77482 T</td>
+<td style="text-align: right;">1597 S</td>
+<td style="text-align: right;">75881 E</td>
+<td style="text-align: right;">4 F</td>
+<td style="text-align: right;">13814585 Q</td>
+<td style="text-align: right;">39.034s</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">C_WrapKey (with asymmetric key)</td>
+<td style="text-align: right;">75238 T</td>
+<td style="text-align: right;">34753 S</td>
+<td style="text-align: right;">40485 E</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">2551340477 Q</td>
+<td style="text-align: right;">235.050s</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">C_GetAttributeValue (key value)</td>
+<td style="text-align: right;">78493 T</td>
+<td style="text-align: right;">28639 S</td>
+<td style="text-align: right;">49854 E</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">38998 Q</td>
+<td style="text-align: right;">166.660s</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">C_SetAttributeValue</td>
+<td style="text-align: right;">78499 T</td>
+<td style="text-align: right;">4758 S</td>
+<td style="text-align: right;">73741 E</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">1338677 Q</td>
+<td style="text-align: right;">54.853s</td>
+</tr>
+</tbody>
+</table>
+<p></small></p>
+</section><section id="the-executive-result" class="slide level2">
+<h1>The executive result</h1>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: right;">Calls</th>
+<th style="text-align: right;">Total time</th>
+<th style="text-align: right;">API time</th>
+<th style="text-align: right;">Overhead</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">10^6</td>
+<td style="text-align: right;">2686s</td>
+<td style="text-align: right;">2586s</td>
+<td style="text-align: right;">3%</td>
+</tr>
+</tbody>
+</table>
+</section></section>
+<section><section id="wrapping-up" class="titleslide slide level1"><h1>Wrapping up</h1></section><section id="cryptosense-analyzer" class="slide level2">
+<h1>Cryptosense analyzer</h1>
 <ul>
 <li>Data structures APIs</li>
 <li>The Cryptosense pipeline: Testing -&gt; Learning -&gt; Model checking</li>
 <li>API fuzzing as a service: RESTful</li>
 </ul>
+</section></section>
     </div>
   </div>
 
@@ -286,7 +521,7 @@ By repeatingly applying the functions of our APIs (here, add), we can build <em>
         controls: true,
         progress: true,
         history: true,
-        center: false,
+        center: true,
         theme: 'night', // available themes are in /css/theme
         transition: 'none', // default/cube/page/concave/zoom/linear/fade/none
 
