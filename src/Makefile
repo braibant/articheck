@@ -1,7 +1,7 @@
 .PHONY all:
 	ocamlbuild -use-ocamlfind -I example \
 	silist.native rbt.native avl.native bdd.native zdd.native \
-	setbug.native skewheap.native
+	setbug.native skewheap.native rbt_mm.native
 
 # arti: arti.ml
 # 	ocamlfind ocamlopt -g -annot -bin-annot -w @1..3@8..12@14..21@23..40-41@43 $< -o $@
@@ -14,6 +14,7 @@ test: all
 	./rbt.native
 	./avl.native
 	./skewheap.native
+	./rbt_mm.native
 
 doc: arti
 	mkdir -p ../doc/

@@ -92,7 +92,7 @@ module Ty = struct
       ?(ident="<abstract>")
       ?fresh
       ?(required=100_000)
-      ?(bag = Bag.hashset ~size:200 ~hash:(Hashtbl.hash))
+      ?(bag = Bag.hashset ~size:500 ~hash:(Hashtbl.hash))
       ()
       : 'a ty =
     {
