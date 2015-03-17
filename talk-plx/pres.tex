@@ -1,0 +1,258 @@
+\documentclass[final,xetex]{beamer}
+
+\usepackage{fontspec}
+\usepackage{xunicode}
+  \setsansfont{Museo Sans 500}
+  \setromanfont{Museo}
+  \setmonofont[Scale=.88]{DejaVu Sans Mono}
+
+\input{tango-colors.tex}
+
+% ------------------------------------------------------------------------------
+
+\usepackage{minted}
+  \usemintedstyle{tango}
+\usepackage{xspace}
+\usepackage{ucharclasses}
+  \setTransitionsFor{Dingbats}{\begingroup\fontspec{DejaVu Sans}[Scale=MatchLowercase]}{\endgroup}
+
+\usepackage{tikz}
+  \usetikzlibrary{tikzmark}
+  \usetikzlibrary{calc}
+  \usetikzlibrary{shapes,arrows}
+  \usetikzlibrary{fit}          % fitting shapes to coordinates
+  \usetikzlibrary{positioning}
+  \usetikzlibrary{backgrounds}  % drawing the background after the foreground
+
+%\def\mintedusecache{}
+\def\mintedwritecache{}
+
+\newcommand{\MzITitle}[1]{
+  \begin{tikzpicture}
+    \node [
+      draw,
+      thin,
+      aluminium5,
+      fill=aluminium1,
+      shape=rectangle,
+      opacity=.9,
+      overlay,
+      text width=7cm,
+      minimum height=3em,
+      font=\Large,
+      text centered
+    ] {
+      {\color{black}#1}
+    };
+  \end{tikzpicture}
+}
+
+\mode<presentation> {
+  \setbeamercolor*{Title bar}{fg=white,bg=skyblue2}
+  \setbeamercolor*{frametitle}{parent=Title bar}
+  \setbeamercolor*{block title}{bg=skyblue2,fg=white}
+  \setbeamercolor*{block body}{bg=aluminium1,fg=aluminium5}
+  \setbeamercolor*{normal text}{bg=white,fg=aluminium5}
+  \setbeamercolor*{palette tertiary}{fg=white,bg=chameleon3}
+  \setbeamercolor*{palette secondary}{bg=aluminium6,fg=white}
+  \setbeamercolor*{palette primary}{fg=aluminium6,bg=aluminium1}
+}
+\usecolortheme[named=chameleon3]{structure}
+\mode<presentation> {
+  \setbeamertemplate{navigation symbols}{}
+  \setbeamertemplate{items}[circle]
+  \setbeamercolor*{Title bar}{bg=white,fg=chameleon3}
+  \setbeamersize{text margin left=2em}
+  \setbeamertemplate{footline}{
+    \leavevmode%
+    \hbox{%
+    \begin{beamercolorbox}[wd=.3\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}%
+      \usebeamerfont{author in head/foot}\insertshortauthor\ —\ \insertshortinstitute
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.4\paperwidth,ht=2.25ex,dp=1ex,center]{title in head/foot}%
+      \usebeamerfont{title in head/foot}\insertshorttitle
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.3\paperwidth,ht=2.25ex,dp=1ex,right]{date in head/foot}%
+      \usebeamerfont{date in head/foot}\insertshortdate{}\hspace*{2em}
+      \insertframenumber{} / \inserttotalframenumber\hspace*{2ex}
+    \end{beamercolorbox}}%
+    \vskip0pt%
+  }
+}
+
+\newcommand{\ac}{\textsf{ArtiCheck}\xspace}
+\newcommand{\red}[1]{{\color{orange2}#1}}
+\newcommand{\green}[1]{{\color{chameleon3}#1}}
+\newcommand{\code}[1]{\texttt{\textbf{#1}}}
+\newcommand{\newauthor}[2]{
+  \parbox{0.4\textwidth}{
+    \texorpdfstring
+      {
+        \centering
+        #1 \\
+        {\scriptsize{\urlstyle{same}\url{#2}\urlstyle{tt}}}
+      }
+      {#1}
+  }
+}
+\newminted{ocaml}{fontsize=\footnotesize,escapeinside=!!}
+
+\title[\ac]{
+\ac: well-typed fuzzing of module APIs
+}
+\author[Jonathan Protzenko]{
+  \newauthor{Jonathan Protzenko}{protz@microsoft.com}
+}
+
+\institute{PL(X)}
+\date{March 18\textsuperscript{th}, 2015}
+
+\begin{document}
+
+\begin{frame}
+  \begin{center}
+  {\fontsize{50}{50}\selectfont\hspace{-1.7em}\ac}
+  \end{center}
+
+  \vspace{2cm}
+    Thomas Braibant\\
+    Jonathan Protzenko\\
+    Gabriel Scherer
+\end{frame}
+
+\begin{frame}{What is testing?}
+  \includegraphics[width=.8\linewidth]{dawg.jpg}
+
+  \vspace{2em}
+
+  Let's make it a little bit smarter than that.
+\end{frame}
+
+\begin{frame}[plain]
+  \begin{center}\MzITitle{The basics of the library}\end{center}
+\end{frame}
+
+\begin{frame}[fragile]{Running example}
+  \begin{ocamlcode}
+(* tree.mli *)
+type t
+val empty: t
+val add: t -> int -> t
+val remove: t -> int -> t
+
+val check: t -> bool
+  \end{ocamlcode}
+
+\bigskip
+
+\pause
+We want to act \emph{as a fake user} of the library.
+
+\bigskip
+
+\pause
+\emph{External} testing \emph{vs.} \emph{internal} testing
+\end{frame}
+
+\begin{frame}{Good call \emph{vs.} bad call}
+  Only \emph{certain} calls are \emph{well-typed}.
+
+  \begin{itemize}
+    \item \code{add empty 1} = \green{GOOD}
+    \item \code{add add add} = \red{BAD}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Getting type-theoretic (1)}
+  GADTs! Describing well-typed calls.
+
+\bigskip
+
+\begin{ocamlcode}
+  type (_, _) fn =
+  | Ret: 'a ty -> ('a, 'a) fn
+  | Fun: 'a ty * ('b , 'c) fn -> ('a -> 'b, 'c) fn
+\end{ocamlcode}
+
+\bigskip
+
+The type \code{('a, 'b) fn} describes a function with arrow type \code{'a},
+whose return type is \code{'b}.
+
+\end{frame}
+
+\begin{frame}[fragile]{Getting type-theoretic (2)}
+  Type descriptors.
+
+  \bigskip
+
+  \begin{ocamlcode}
+type 'a ty = {
+  mutable enum: 'a list;
+  fresh: ('a list -> 'a) option;
+}
+  \end{ocamlcode}
+
+  \bigskip
+
+  The type \code{'a ty} describes a \emph{collection of instances} for type
+  \code{'a}.
+
+  \bigskip
+
+  \begin{itemize}
+    \item For \code{int}: \code{fresh} generates a fresh integer each time.
+    \item For \code{t}: no \code{fresh} function.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Evaluating!}
+\begin{ocamlcode}
+let rec eval : type a b. (a,b) fn -> a -> b list =
+  fun fd f ->
+    match fd with
+    | Ret _ -> [f]
+    | Fun (ty,fd) -> List.flatten (
+        List.map (fun e -> eval fd (f e)) ty.enum)
+let rec codom : type a b. (a,b) fn -> b ty =
+  function
+    | Ret ty -> ty
+    | Fun (_,fd) -> codom fd
+\end{ocamlcode}
+\end{frame}
+
+\begin{frame}[fragile]{Registering new instances}
+\begin{ocamlcode}
+let use (fd: ('a, 'b) fn) (f: 'a): unit =
+  let prod, ty = eval fd f, codom fd in
+  List.iter (fun x ->
+    if not (List.mem x ty.enum)
+    then ty.enum <- x::ty.enum
+  ) prod
+\end{ocamlcode}
+
+\end{frame}
+
+\begin{frame}[fragile]{Declaring an interface}
+\begin{ocamlcode}
+type sig_elem = Elem : ('a,'b) fn * 'a -> sig_elem
+type sig_descr = (string * sig_elem) list
+
+let tree_t : Tree.t ty  = ...
+let int_t = ... (* integers use a [fresh] function*)
+
+let sig_of_tree = [
+  ("empty", Elem (returning tree_t, Tree.empty));
+  ("add", Elem (tree_t @-> int_t @-> returning tree_t, Tree.add)); ]
+let _ =
+  Arti.generate sig_of_tree;
+  assert (Arti.counter_example tree_t Tree.check = None)
+\end{ocamlcode}
+
+\end{frame}
+
+\begin{frame}[plain]
+  \begin{center}\MzITitle{Where the trouble begins}\end{center}
+\end{frame}
+
+\end{document}
