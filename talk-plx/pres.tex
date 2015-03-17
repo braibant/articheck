@@ -121,11 +121,13 @@
 \end{frame}
 
 \begin{frame}{What is testing?}
-  \includegraphics[width=.8\linewidth]{dawg.jpg}
+  \begin{center}
+    \includegraphics[width=.8\linewidth]{dawg.jpg}
 
-  \vspace{2em}
+    \vspace{2em}
 
-  Let's make it a little bit smarter than that.
+    Let's make it a little bit smarter than that.
+  \end{center}
 \end{frame}
 
 \begin{frame}[plain]
@@ -138,7 +140,7 @@
 type t
 val empty: t
 val add: t -> int -> t
-val remove: t -> int -> t
+val remove: t -> int -> t option
 
 val check: t -> bool
   \end{ocamlcode}
@@ -146,16 +148,16 @@ val check: t -> bool
 \bigskip
 
 \pause
-We want to act \emph{as a fake user} of the library.
+We want to act \green{as a fake user} of the library.
 
 \bigskip
 
 \pause
-\emph{External} testing \emph{vs.} \emph{internal} testing
+\green{External} testing \green{vs.} \green{internal} testing
 \end{frame}
 
-\begin{frame}{Good call \emph{vs.} bad call}
-  Only \emph{certain} calls are \emph{well-typed}.
+\begin{frame}{Good call \green{vs.} bad call}
+  Only \green{certain} calls are \green{well-typed}.
 
   \begin{itemize}
     \item \code{add empty 1} = \green{GOOD}
@@ -170,14 +172,23 @@ We want to act \emph{as a fake user} of the library.
 
 \begin{ocamlcode}
   type (_, _) fn =
-  | Ret: 'a ty -> ('a, 'a) fn
+  | Ret: 'c ty -> ('c, 'c) fn
   | Fun: 'a ty * ('b , 'c) fn -> ('a -> 'b, 'c) fn
 \end{ocamlcode}
 
 \bigskip
 
-The type \code{('a, 'b) fn} describes a function with arrow type \code{'a},
-whose return type is \code{'b}.
+The type \code{('d, 'c) fn} describes a function with arrow type \code{'d},
+whose return type is \code{'c}.
+
+\pause
+
+\bigskip
+
+\begin{ocamlcode}
+  let add_fn: (Tree.t -> int -> Tree.t) fn =
+    Fun (tree_ty, Fun (int_ty, Ret tree_ty))
+\end{ocamlcode}
 
 \end{frame}
 
@@ -195,7 +206,7 @@ type 'a ty = {
 
   \bigskip
 
-  The type \code{'a ty} describes a \emph{collection of instances} for type
+  The type \code{'a ty} describes a \green{collection of instances} for type
   \code{'a}.
 
   \bigskip
@@ -214,15 +225,16 @@ let rec eval : type a b. (a,b) fn -> a -> b list =
     | Ret _ -> [f]
     | Fun (ty,fd) -> List.flatten (
         List.map (fun e -> eval fd (f e)) ty.enum)
-let rec codom : type a b. (a,b) fn -> b ty =
-  function
-    | Ret ty -> ty
-    | Fun (_,fd) -> codom fd
 \end{ocamlcode}
 \end{frame}
 
 \begin{frame}[fragile]{Registering new instances}
 \begin{ocamlcode}
+let rec codom : type a b. (a,b) fn -> b ty =
+  function
+    | Ret ty -> ty
+    | Fun (_,fd) -> codom fd
+
 let use (fd: ('a, 'b) fn) (f: 'a): unit =
   let prod, ty = eval fd f, codom fd in
   List.iter (fun x ->
@@ -244,6 +256,7 @@ let int_t = ... (* integers use a [fresh] function*)
 let sig_of_tree = [
   ("empty", Elem (returning tree_t, Tree.empty));
   ("add", Elem (tree_t @-> int_t @-> returning tree_t, Tree.add)); ]
+
 let _ =
   Arti.generate sig_of_tree;
   assert (Arti.counter_example tree_t Tree.check = None)
@@ -251,8 +264,149 @@ let _ =
 
 \end{frame}
 
+\begin{frame}[fragile]{More on the actual implementation (1)}
+
+  \begin{itemize}
+    \item Two GADTs, \code{neg} for computation and \code{pos} for values.
+    \item Destructuring: sums and products are \green{composed} and
+      \green{decomposed}.
+  \end{itemize}
+
+  \begin{ocamlcode}
+  type (_, _) neg =
+  | Fun : 'a pos * ('b, 'c) neg -> ('a -> 'b, 'c) neg
+  | Ret : 'a pos -> ('a, 'a) neg
+  and _ pos =
+  | Ty : 'a ty -> 'a pos
+  | Sum : 'a pos * 'b pos -> ('a, 'b) sum pos
+  | Prod : 'a pos  * 'b pos -> ('a * 'b) pos
+  | Bij : 'a pos * ('a, 'b) bijection -> 'b pos
+  and ('a, 'b) sum = L of 'a | R of 'b
+  and ('a, 'b) bijection = ('a -> 'b) * ('b -> 'a)
+  \end{ocamlcode}
+
+\end{frame}
+
+\begin{frame}{More on the actual implementation (2)}
+  \begin{itemize}
+    \item Symbolic representation of \emph{sets} of values (e.g. \code{Union},
+      \code{Product}, etc.) to tame combinatorial explosion (don't build all
+      possible products!).
+    \item A fixpoint computation to implement the equations between types.
+  \end{itemize}
+\end{frame}
+
 \begin{frame}[plain]
   \begin{center}\MzITitle{Where the trouble begins}\end{center}
+\end{frame}
+
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item We \green{describe} a module interface.
+    \item We act \green{as a user} of the interface, and construct
+      \green{instances} of a given type.
+    \item We do all of that in a \green{well-typed} manner.
+    \item The library exports a \code{check} function: we \green{do not access
+      its internals}.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Issue \#1: exploration}
+  The \green{exploration functions} describe:
+  \begin{itemize}
+    \item how to \green{build new instances}
+    \item what to do with \green{old instances}
+  \end{itemize}
+
+  \bigskip
+
+  Example: breadth-first search.
+
+  \bigskip
+
+  Pseudo-code:
+\begin{ocamlcode}
+  let bfs =
+    List.map (fun f -> [ f x <- !$\forall x \in \mathsf{domain}(f)$! ]) all_functions
+      |> sort_of_flatten
+      |> register
+\end{ocamlcode}
+
+\end{frame}
+
+\begin{frame}[fragile]{Issue \#1: exploration}
+  \begin{itemize}
+    \item \green{Discarding strategy}: test predicate on the fly and remove
+      "old" instances from round $n - 1$. Is that right? (They may be useful
+      later?) Too slow?
+    \item \green{Class of functions}: what are other useful functions? Should
+      the client be able to parameterize the search?
+    \item Is there any way to skew the exploration towards more meaningful
+      functions?
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Issue \#2: predicates}
+  We offer a simple language of predicates.
+
+  \[
+\forall x_1 \dots x_n, P(x_1, \dots, x_n) \Rightarrow T(x_1, \dots,
+x_n) \]
+
+where $P(x_1, \dots, x_n)$ (the \emph{precondition}) and
+$T(x_1, \dots, x_n)$ (the \emph{test}) are both quantifier-free
+formulas.
+
+\bigskip
+
+Makes a difference between a \green{meaningful} test (precondition was met,
+predicate is false) and a \green{meaningless test} (precondition was not met).
+
+\bigskip
+
+Good? Overkill?
+\end{frame}
+
+\begin{frame}{Issue \#3: testcase reduction}
+  We keep call trees that led to a failure, i.e. we keep \green{witnesses} of
+  type \green{'a wit}.
+
+  \bigskip
+
+  What is a good strategy for reducing the size of a witness? Should the user
+  provide a function \code{'a wit -> 'a wit list} that breaks up a witness into
+  smaller candidates? (e.g. exposes the sub-trees?)
+
+  \bigskip
+
+  We lose the connection to the original call tree. May not be dramatic for some
+  use-cases (HSMs).
+\end{frame}
+
+\begin{frame}{Issue \#4: higher-order}
+  Polymorphic (parameterized) types: monomorphize.
+
+  \bigskip
+
+  Higher-order functions: we do not synthesize, and ask the user to provide a
+  few representative candidates. Is it foolish?
+\end{frame}
+
+\begin{frame}{Issue \#5: good examples}
+  Data structures are cool. Thomas' work on HSMs is cool too. Anything else
+  worth checking?
+\end{frame}
+
+\begin{frame}{Issue \#6: proper library}
+  Auto-generate interface descriptions. Working on it.
+\end{frame}
+
+\begin{frame}{}
+  Any other suggestions/questions?
+
+  \bigskip
+
+  Thanks!
 \end{frame}
 
 \end{document}
