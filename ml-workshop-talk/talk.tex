@@ -1,0 +1,503 @@
+\documentclass[10pt]{beamer}
+\usepackage[utf8]{inputenc}
+\usepackage{courier}
+\usepackage{txfonts}
+\usepackage[english]{babel}
+\usepackage{xcolor}
+\usetheme{AnnArbor}
+\usecolortheme{beaver}
+
+\setbeamertemplate{headline}{}
+% \setbeamertemplate{frametitle}{\insertframetitle}
+\setbeamertemplate{navigation symbols}{}
+
+\setbeamertemplate{itemize item}{\scriptsize\raise1.25pt\hbox{\donotcoloroutermaths$\blacktriangleright$}}
+\setbeamertemplate{itemize subitem}{\tiny\raise1.5pt\hbox{\donotcoloroutermaths$\blacktriangleright$}}
+\setbeamertemplate{itemize subsubitem}{\tiny\raise1.5pt\hbox{\donotcoloroutermaths$\blacktriangleright$}}
+\setbeamertemplate{enumerate item}{\insertenumlabel.}
+\setbeamertemplate{enumerate subitem}{\insertenumlabel.\insertsubenumlabel}
+\setbeamertemplate{enumerate subsubitem}{\insertenumlabel.\insertsubenumlabel.\insertsubsubenumlabel}
+\setbeamertemplate{enumerate mini template}{\insertenumlabel}
+
+\title{Well-typed smart fuzzing}%
+\author[T. Braibant]{Thomas Braibant \and Jonathan Protzenko \and Gabriel Scherer}
+\institute[Cryptosense]{Cryptosense \qquad Inria}
+\date[ML14]{ML Family Workshop}
+
+\setbeamercovered{transparent}
+%\setbeamerfont{frametitle}{size={\normalsize}}
+
+% \usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{mathpartir}
+
+\usepackage{listings}
+\usepackage{graphicx}
+\definecolor{ltblue}{rgb}{0,0.4,0.4}
+\definecolor{dkblue}{rgb}{0,0.1,0.6}
+\definecolor{dkgreen}{rgb}{0,0.4,0}
+\definecolor{dkviolet}{rgb}{0.3,0,0.5}
+\definecolor{dkred}{rgb}{0.5,0,0}
+\usepackage{lstocaml}
+\usepackage{tikz}
+\usetikzlibrary{shapes,positioning,fit, shadows}
+
+\begin{document}
+% \newcommand \blue[1]{{\color{red!80!black}{#1}}}
+\newcommand \orange[1]{{\color{orange}{#1}}}
+% \newcommand \red[1]{{\color{red}{#1}}}
+% \newcommand \grey[1]{{\color{gray}{#1}}}
+% \newcommand \green[1]{{\color{violet}{#1}}}
+% \newcommand \white[1]{{\color{white}{#1}}}
+
+\newcommand\parenthesis[1] {
+  \begin{flushright}
+    {\scriptsize \em \color{dkred}{{{{ #1}}}}}
+  \end{flushright}
+
+}
+
+\newcommand\remark[1] {
+  \center{\bf #1}
+}
+
+\newcommand\plan[2]
+{
+\begin{frame}[plain]
+  \begin{center}
+    {\Huge  \sc #1} \\
+
+    \vspace{1cm}
+
+    #2
+\end{center}
+\end{frame}
+}
+
+\newcommand\fullpage[2]
+{ % all template changes are local to this group.
+
+    \begin{frame}[plain]
+        \begin{tikzpicture}[remember picture, overlay]
+          \node[at=(current page.center)]  {
+                \includegraphics[width=\paperwidth, height=\paperheight, keepaspectratio]{#1}
+            };
+        \end{tikzpicture}
+     \end{frame}
+}
+
+\tikzstyle{main} = [draw=dkred, very thick, rounded rectangle,inner sep=4pt, inner ysep=4pt, solid]
+
+\begin{frame}
+  \center
+  \titlepage
+\end{frame}
+
+%%%  Intro
+\fullpage{img/trading.jpg}{Test}
+\fullpage{img/ncipher.jpg}{}     % Alexander Klink
+\fullpage{img/luna.jpg}{}        % Alexander Klink
+
+\begin{frame}[plain]
+  \begin{columns}
+    \column{0.45\textwidth}
+    \includegraphics[width=\textwidth,keepaspectratio]{img/selfie.jpg}
+    \center{\bf U.S. dept. of Justice}
+    \column{0.45\textwidth}
+    \center{\bf Two heists. }
+
+    \center{\bf 5M\$ + 40M\$.}
+
+    \center{\bf 5+12 accounts}
+
+    \center{\bf 3+10 hours}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Cryptosense workflow}
+  \begin{center}
+    \begin{tikzpicture}
+      \draw (0,0) node[main,anchor=east] (n1) {Testing} (2,0)
+      node[main,anchor=center] (n2) {Learning}; \draw[->] (n1) -- (n2)
+      node[pos=0.5](mpd){};
+
+      \node[main,anchor=center, right=1 of n2] (n3) {Model-checking};
+      \draw[->] (n2) -- (n3);
+
+      \node[main,anchor=center, right=1 of n3] (n4) {Monitoring};
+      \draw[->] (n3) -- (n4);
+    \end{tikzpicture}
+  \end{center}
+  \pause
+  \remark{In this talk, I will focus on testing}
+\end{frame}
+
+
+\begin{frame}{Writing test cases is a pain.}
+
+  \center{\bf Can I generate test cases automatically?}
+
+  \begin{description}
+  \item[\sc Yes:] QuickCheck.
+    \begin{itemize}
+    \item A combinator library to generate test cases in Haskell
+      \parenthesis{and a host of other languages}
+    \item Generate test cases for \alert{functions} based on their \alert{types}.
+      \\
+      E.g. \ocamle{val insert: int rbt -> int -> int rbt}
+    \end{itemize}
+  \item[\sc But:] ~\\
+    \begin{itemize}
+    \item What about testing the \alert{interaction} of several functions?
+    \item How to deal with \alert{abstract} types?
+    \end{itemize}
+  \end{description}
+\end{frame}
+
+\begin{frame}{Articheck}
+
+  \center{\bf A prototype library to generate test cases for safety properties}
+
+  \medskip
+
+  \begin{center}
+    \begin{tabular}{|c|c|}
+      \hline
+      QuickCheck & Articheck \\
+      \hline
+      Whitebox (internal) & Blackbox (external) \\
+      per function & at the API level \\
+      generate random values & combine function calls \\
+      use type definitions & use the interface\\
+      \hline
+    \end{tabular}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Leveraging APIs}
+
+  \begin{itemize}
+  \item Types help generate \alert{good} random values.
+    \pause
+  \item APIs help generate values that have the right \alert{internal invariants}.
+    \pause
+  \item Yet. Well-typed does not mean well-formed! We are still \alert{fuzzing}.
+  \end{itemize}
+
+\end{frame}
+
+%%% Outline
+
+\plan{Outline}{
+  \begin{enumerate}
+  \item Describing and testing APIs in a nutshell
+  \item Taming the combinatorial explosion
+  \item An industrial perspective: crypto APIs
+  \end{enumerate}
+}
+
+%%% What's an API
+
+\plan{Describing APIs}
+
+\begin{frame}[fragile]
+\frametitle{What's an API?}
+  \begin{columns}
+    \column{0.45\linewidth}
+\begin{ocaml}
+(* Mock Set API*)
+type 'a t
+val empty: 'a t
+val insert: 'a -> 'a t -> 'a t
+val delete: 'a -> 'a t -> 'a t
+val mem: 'a -> 'a t -> bool
+$ $
+\end{ocaml}
+    \column{0.5\linewidth}
+\begin{ocaml}
+(* Mock crypto API*)
+type template
+type key
+type text = string
+val generate_key: template -> key
+val wrap_key: key -> key -> text
+val encrypt: key -> text -> text
+\end{ocaml}
+\end{columns}
+
+\remark{In this talk, APIs are first-order.}
+
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Testing an implementation of red-black trees}
+  \begin{columns}
+\column{0.45\linewidth}
+\begin{ocaml}
+(* Mock Set API*)
+type 'a t
+val empty: 'a t
+val insert: 'a -> 'a t -> 'a t
+val delete: 'a -> 'a t -> 'a t
+val mem: 'a -> 'a t -> bool
+$ $
+\end{ocaml}
+\column{0.45\linewidth}
+\begin{tikzpicture}[%
+  red/.style={circle, draw=none, rounded corners=1mm, fill=red, drop shadow,
+        text centered, anchor=north, text=white, scale=0.5},
+  black/.style={circle, draw=none, rounded corners=1mm, fill=black, drop shadow,
+        text centered, anchor=north, text=white, scale=0.5},
+  level distance=0.25cm,
+  sibling distance=0.5cm,
+  growth parent anchor=south
+  ]
+  \node [black] (1) {21}
+    child {[sibling distance=0.25cm]node [red] {15}
+      child {node [black] {11}}
+      child {node [black] {17}}
+    }
+    child{[sibling distance=0.25cm]
+      node [black] {51}
+      child {
+        node [red] {22}
+      }
+      child {
+        node [red] {53}
+      }
+    };
+
+    \node [black, right= 1cm of 1] (2) {3};
+
+    \node [black, right= 1cm of 2] (3) {3}
+    child{[sibling distance=0.25cm] node [red] {1}};
+
+    \pause
+
+    \node [black, right= 1cm of 3] (4) {3}
+    child{[sibling distance=0.25cm] node [red] {1}}
+    child{[sibling distance=0.25cm] node [red] {4}};
+;
+\end{tikzpicture}
+
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{A toy DSL for describing APIs}
+
+\center{\bf Describing types.}
+\begin{ocaml}
+type 'a ty = {name: string; mutable content: 'a set; ...}
+\end{ocaml}
+\pause
+
+\center{\bf Describing functions.}
+\begin{ocaml}
+type ('a,'b) fn =
+| ret : 'a ty -> ('a,'a) fn
+| @-> : 'a ty -> ('b,'c) fn -> ('a -> 'b,'c) fn
+\end{ocaml}
+
+\pause
+
+\center{\bf Describing signatures.}
+\begin{ocaml}
+type elem = Elem: string * ('a,'b) fn * 'a -> elem
+type signature = elem list
+let declare label fn f = ...
+\end{ocaml}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Coming back to red-black trees}
+
+\begin{ocaml}
+let int_ty : int ty = ...
+let t_ty : (int RBT.t) ty  = ...
+let api = [
+  declare "empty"  (ret t_ty) RBT.empty;
+  declare "insert" (int_ty @-> t_ty @-> ret t_ty) RBT.insert;
+  declare "delete" (int_ty @-> t_ty @-> ret t_ty) RBT.delete;
+  declare "mem"    (int_ty @-> t_ty @-> ret bool_ty) RBT.mem;
+]
+\end{ocaml}
+
+\pause
+
+\center{\bf Many possible strategies to combine these functions.}
+\vspace{-1em}
+\parenthesis{depth-first, breadth-first, round-robin, random walks}
+
+{\bf This yields a list of inhabitants for the types:}
+\begin{itemize}
+\item used to check invariants (e.g., being a red-black tree)
+\item used to check correctness properties
+  \ocamle{$\forall$ x : t_ty, $\forall$ e : int_ty, delete x (insert x t) = t}
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{A richer DSL for types}
+
+\begin{ocaml}
+type _ ty =
+| Abstract: 'a abstract -> 'a ty
+| Sum: 'a ty * 'b ty -> ('a,'b) Either.t ty
+| Product: 'a ty * 'b ty -> ('a * 'b) ty
+| Filter: 'a ty * ('a -> bool) -> 'a ty
+| Bijection: 'a ty * ('a -> 'b) * ('b -> 'a) -> 'b ty
+\end{ocaml}
+
+\center{\bf Dolev-Yao style: A user/attacker can decompose sum and products}
+
+\end{frame}
+%%% DSL
+
+%%% Combinatorial explosion
+
+%%% Crypto APIs
+
+\plan{Field report: Crypto APIs}{}
+
+\begin{frame}{Some issues}
+
+  \begin{itemize}
+  \item We need to enumerate a big \alert{combinatorial space} made of:
+    \begin{itemize}
+    \item constants (types whose inhabitants are known, e.g. templates, key types, mechanisms)
+    \item variables (types populated dynamically, e.g. handles, ciphertexts)
+    \end{itemize}
+  \item We want a good coverage (``smaller values'' first)
+  \item We want a reproducible behavior (i.e., avoid random testing)
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Feature \#1: a library of enumerators}
+  \begin{description}
+  \item[\sc Low memory footprint:] if possible, constant space
+  \item[\sc Efficient access:] if possible, constant time for random accesses
+  \item[\sc Some bad solutions:] ~
+    \begin{itemize}
+    \item Arrays: one cell per element, contiguous, ...
+    \item Lists: one cell per element, linear time accesses, ...
+    \item Lazy lists: idem, ...
+    \end{itemize}
+\end{description}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Quick peek}
+
+\begin{ocaml}
+type 'a t = {size: int; nth: int -> 'a}
+
+val of_list     : 'a list -> 'a t
+val product     : 'a t -> 'a t -> ('a * 'b) t
+val map         : ('a -> 'b) -> 'a t -> 'b t
+val append      : 'a t -> 'a t -> 'a t
+...
+val subset      : 'a t list -> 'a list t t
+...
+val squash      : 'a t t -> 'a t
+val round_robin : 'a t t -> 'a t
+\end{ocaml}
+
+\ocamle{subset} is paramount to generate templates (list of
+attributes) efficiently.
+
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Feature \#2: a library for combinatorial enumeration}
+
+\begin{ocaml}
+(* Combinators to describe the combinatorial problem *)
+type 'a d
+val constant: 'a Enum.t -> 'a d
+val variable: 'a set    -> 'a d
+val filter  : ('a -> bool) -> 'a d -> 'a d
+val map     : ('a -> 'b) -> 'a d -> 'b d
+val sum     : 'a d -> 'b d -> ('a,'b) Either.t d
+val product : 'a d -> 'b d -> ('a * 'b) d
+\end{ocaml}
+\pause
+\begin{ocaml}
+(* Imperative updates to the state of the exploration*)
+type 'a t
+val start: 'a d -> 'a t
+val take : 'a t -> 'a option
+val add  : 'a -> 'a set -> unit
+\end{ocaml}
+
+\begin{itemize}
+\item The state is roughly an enumerator and an index.
+\item When empty, compute an enumerator for the next elements to process
+  \begin{itemize}
+  \item avoiding redundancy with what has been done already;
+  \item maximizing \alert{throughput}
+  \end{itemize}
+\end{itemize}
+\end{frame}
+\begin{frame}[fragile]
+  \frametitle{Quick peek}
+
+  Compute the effect of adding a new element $v$ to a variable $\alpha$.
+  \begin{displaymath}
+  \begin{array}{rcl}
+    \delta_\alpha(k) & \triangleq & \emptyset \\
+    \delta_\alpha(\alpha) & \triangleq & \left\{v\right\} \\
+    \delta_\alpha(\beta)  & \triangleq & \emptyset \\
+    \delta_\alpha(f~b)    & \triangleq & f (\delta_\alpha{b}) \\
+    \delta_\alpha(a \times b)    & \triangleq &
+    \delta_\alpha(b) \times c  \cup b \times \delta_\alpha(c) \\
+  \end{array}
+\end{displaymath}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Testing an HSM}
+\begin{scriptsize}
+\begin{tabular}{|l|r|r|r|r|r|}
+\hline
+\verb!C_GetTokenInfo!                  &      1 &      1 &        &      0.001 &         0\\
+\verb!C_GenerateKey!                   &  30095 &  10705 &  19390 &      1.730 &         0\\
+\verb!C_GenerateKeyPair!               & 116563 &  22478 &  94085 &    100.224 &   9382739\\
+\verb!C_CreateObject (DES)!            &   6019 &   2141 &   3878 &      0.339 &         0\\
+\verb!C_CreateObject (DES3)!           &   6019 &   2141 &   3878 &      0.357 &         0\\
+\verb!C_CreateObject (AES)!            &  18057 &   6423 &  11634 &      1.236 &         0\\
+\verb!C_CreateObject (RSA, public)!    &   1161 &    577 &    584 &      0.143 &         0\\
+\verb!C_CreateObject (RSA, private)!   &   4091 &   1199 &   2892 &      1.122 &         0\\
+\verb!C_Encrypt (with symmetric key)!  & 110160 &   4716 & 105444 &      5.249 &         0\\
+\verb!C_Encrypt (with asymmetric key)! &  67648 &  37730 &  29918 &      6.691 &        47\\
+\verb!C_Decrypt (with symmetric key)!  & 116466 &    111 & 116355 &      9.424 &    360498\\
+\verb!C_Decrypt (with asymmetric key)! & 116563 &     82 & 116477 &    149.626 &    250910\\
+\verb!C_WrapKey (with symmetric key)!  & 116563 &   1824 & 114737 &      9.833 &   8198753\\
+\verb!C_WrapKey (with asymmetric key)! & 116563 &  72862 &  43674 &    119.661 & 368429621\\
+\verb!C_GetAttributeValue (key value)! &  57469 &  24736 &  32733 &     19.800 &         0\\
+\verb!C_SetAttributeValue!             & 116562 &   3909 & 112653 &     17.796 & 387844143\\
+\hline
+\end{tabular}
+\end{scriptsize}
+
+\center{\bf $10^6$ tests in 540s. 20\%overhead. 0 failures.}
+
+
+\end{frame}
+
+\begin{frame}{Take away}
+
+  \remark{We have a principled way to test (persistent) APIs.}
+
+\end{frame}
+
+\plan{One more thing about Cryptosense}{
+  We find bugs in HSMs. \\
+  We find logical attacks on crypto APIs. \\
+  We are recruiting.
+}
+
+\end{document}
